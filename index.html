@@ -95,6 +95,26 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
 
 
 .caja-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}.caja-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}.caja-kpi{background:#f7f9fc;border:1px solid var(--borde);border-radius:8px;padding:14px}.caja-kpi b{display:block;font-size:20px;margin-top:6px}.caja-destacado{background:#eaf7f2;border-color:#a9d8c9}.caja-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.caja-payment-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--borde)}.caja-total-row{font-size:18px;border-bottom:0;padding-top:14px}.caja-mov-form{display:grid;grid-template-columns:1fr 1fr;gap:10px}.caja-mov-form #cajaMovDetalle,.caja-mov-form button{grid-column:1/-1}.caja-diff-ok{color:#169873}.caja-diff-bad{color:#d9534f}@media(max-width:1000px){.caja-kpis{grid-template-columns:repeat(2,1fr)}.caja-grid{grid-template-columns:1fr}}
+
+.price-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.price-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.price-kpi{background:#f7f9fc;border:1px solid var(--borde);border-radius:8px;padding:14px}
+.price-kpi b{display:block;font-size:20px;margin-top:6px}
+.price-toolbar{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:12px}
+.price-toolbar .field{min-width:180px;flex:1}
+.price-toolbar .field.smallfield{min-width:120px;max-width:160px}
+.price-input{width:92px;padding:7px 8px;text-align:right}
+.price-suggest{font-weight:700}
+.price-up{color:#d9534f;font-weight:700}
+.price-down{color:#169873;font-weight:700}
+.price-same{color:#6c7885}
+.price-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+.price-tabs{display:flex;gap:8px;margin-bottom:14px}
+.price-tabs button{border:1px solid var(--borde);background:white;border-radius:6px;padding:10px 14px;cursor:pointer;font-weight:700}
+.price-tabs button.active{background:#dceafb;border-color:#4d82c6}
+.price-sub{display:none}.price-sub.active{display:block}
+@media(max-width:1000px){.price-kpis{grid-template-columns:repeat(2,1fr)}}
+
 </style>
 </head>
 <body>
@@ -462,7 +482,95 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
   </div>
  </section>
  <section id="caja" class="page"><div class="panel"><div class="caja-head"><div><h2 style="margin:0">Caja</h2><div id="cajaEstadoTexto" class="small" style="margin-top:5px">Caja cerrada</div></div><div><button id="btnAbrirCaja" class="btn btn-success" onclick="abrirCaja()">ABRIR CAJA</button><button id="btnCerrarCaja" class="btn btn-danger" style="display:none" onclick="mostrarCierreCaja()">CERRAR CAJA</button></div></div><div class="caja-kpis"><div class="caja-kpi">Fondo inicial<b id="cajaFondo">$ 0,00</b></div><div class="caja-kpi">Ventas efectivo<b id="cajaVentasEfectivo">$ 0,00</b></div><div class="caja-kpi">Ingresos<b id="cajaIngresos">$ 0,00</b></div><div class="caja-kpi">Gastos / retiros<b id="cajaEgresos">$ 0,00</b></div><div class="caja-kpi caja-destacado">Efectivo esperado<b id="cajaEsperado">$ 0,00</b></div></div><div class="caja-grid"><div class="form-section"><h3>Ventas por medio de pago</h3><div class="caja-payment-row"><span>Efectivo</span><b id="cajaPagoEfectivo">$ 0,00</b></div><div class="caja-payment-row"><span>Mercado Pago</span><b id="cajaPagoMP">$ 0,00</b></div><div class="caja-payment-row"><span>Transferencia</span><b id="cajaPagoTransferencia">$ 0,00</b></div><div class="caja-payment-row"><span>Tarjeta</span><b id="cajaPagoTarjeta">$ 0,00</b></div><div class="caja-payment-row caja-total-row"><span>Total ventas</span><b id="cajaPagoTotal">$ 0,00</b></div></div><div class="form-section"><h3>Registrar movimiento</h3><div class="caja-mov-form"><select id="cajaMovTipo"><option value="INGRESO">Ingreso</option><option value="GASTO">Gasto</option><option value="RETIRO">Retiro de efectivo</option></select><input id="cajaMovImporte" type="number" min="0" step="0.01" placeholder="Importe"><input id="cajaMovDetalle" placeholder="Detalle / motivo"><button class="btn btn-primary" onclick="registrarMovimientoCaja()">Guardar movimiento</button></div></div></div><div class="form-section"><h3>Movimientos de la caja actual</h3><div class="table-wrap" style="max-height:42vh"><table><thead><tr><th>Hora</th><th>Tipo</th><th>Detalle</th><th class="num">Importe</th></tr></thead><tbody id="tablaMovCaja"></tbody></table></div></div><div class="form-section"><h3>Historial de cierres</h3><div class="table-wrap" style="max-height:42vh"><table><thead><tr><th>Fecha</th><th>Apertura</th><th>Cierre</th><th class="num">Esperado</th><th class="num">Contado</th><th class="num">Diferencia</th></tr></thead><tbody id="tablaCierresCaja"></tbody></table></div></div></div><div id="modalAperturaCaja" class="modal-backdrop"><div class="modal"><h3>Abrir caja</h3><label>Fondo inicial / efectivo de apertura</label><input id="cajaAperturaImporte" type="number" min="0" step="0.01" value="0"><div class="modal-actions"><button class="btn" style="border:1px solid var(--borde);background:white" onclick="cerrarModalApertura()">Cancelar</button><button class="btn btn-success" onclick="confirmarAperturaCaja()">Abrir caja</button></div></div></div><div id="modalCierreCaja" class="modal-backdrop"><div class="modal"><h3>Cerrar caja</h3><div class="calc-note" style="margin-bottom:12px">Efectivo esperado: <b id="cajaCierreEsperado">$ 0,00</b></div><label>Efectivo contado</label><input id="cajaCierreContado" type="number" min="0" step="0.01" placeholder="0,00"><div class="calc-note" style="margin-top:12px">Diferencia: <b id="cajaCierreDiferencia">$ 0,00</b></div><div class="modal-actions"><button class="btn" style="border:1px solid var(--borde);background:white" onclick="cerrarModalCierre()">Cancelar</button><button class="btn btn-danger" onclick="confirmarCierreCaja()">Confirmar cierre</button></div></div></div></section>
- <section id="precios" class="page"><div class="panel"><h2>Precios</h2><p>Módulo pendiente.</p></div></section>
+ <section id="precios" class="page">
+  <div class="panel">
+    <div class="price-head">
+      <div>
+        <h2 style="margin:0">Precios</h2>
+        <div class="small" style="margin-top:5px">Actualización de precios según costo sin IVA, IVA y porcentaje de ganancia.</div>
+      </div>
+    </div>
+
+    <div class="price-kpis">
+      <div class="price-kpi">Artículos visibles<b id="precioKpiArt">0</b></div>
+      <div class="price-kpi">Con precio a revisar<b id="precioKpiRevisar">0</b></div>
+      <div class="price-kpi">Costo valorizado<b id="precioKpiCosto">$ 0,00</b></div>
+      <div class="price-kpi">Venta valorizada<b id="precioKpiVenta">$ 0,00</b></div>
+    </div>
+
+    <div class="price-tabs">
+      <button id="tabPrecioActualizar" class="active" onclick="showPrecioTab('actualizar')">Actualizar precios</button>
+      <button id="tabPrecioHistorial" onclick="showPrecioTab('historial')">Historial de cambios</button>
+    </div>
+
+    <div id="precioActualizar" class="price-sub active">
+      <div class="price-toolbar">
+        <div class="field">
+          <label>Buscar artículo</label>
+          <input id="precioBuscar" placeholder="Código, barra o descripción...">
+        </div>
+        <div class="field">
+          <label>Proveedor</label>
+          <select id="precioProveedor"><option value="">Todos</option></select>
+        </div>
+        <div class="field">
+          <label>Rubro</label>
+          <select id="precioRubro"><option value="">Todos</option></select>
+        </div>
+        <div class="field smallfield">
+          <label>Redondeo</label>
+          <select id="precioRedondeo">
+            <option value="0">Sin redondeo</option>
+            <option value="10">A $10</option>
+            <option value="50">A $50</option>
+            <option value="100" selected>A $100</option>
+            <option value="500">A $500</option>
+          </select>
+        </div>
+        <div class="field smallfield">
+          <button class="btn btn-primary" style="width:100%" onclick="renderPrecios()">Buscar</button>
+        </div>
+      </div>
+
+      <div class="calc-note" style="margin-bottom:12px">
+        Fórmula: <b>costo sin IVA × (1 + IVA) × (1 + % ganancia)</b>. Podés cambiar el porcentaje por artículo y luego aplicar el precio sugerido.
+      </div>
+
+      <div class="table-wrap" style="max-height:62vh">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px"><input id="precioCheckTodos" type="checkbox" onclick="toggleTodosPrecios(this.checked)"></th>
+              <th>Código</th><th>Artículo</th><th>Proveedor</th>
+              <th class="num">Costo s/IVA</th><th class="num">IVA</th>
+              <th class="num">% Gan.</th><th class="num">Precio actual</th>
+              <th class="num">Precio sugerido</th><th class="num">Diferencia</th>
+            </tr>
+          </thead>
+          <tbody id="tablaPrecios"></tbody>
+        </table>
+      </div>
+
+      <div class="price-actions">
+        <button class="btn" style="border:1px solid var(--borde);background:white" onclick="recalcularPreciosVisibles()">Recalcular sugeridos</button>
+        <button class="btn btn-primary" onclick="aplicarPreciosSeleccionados()">APLICAR PRECIOS SELECCIONADOS</button>
+      </div>
+    </div>
+
+    <div id="precioHistorial" class="price-sub">
+      <div class="price-toolbar">
+        <div class="field"><label>Buscar</label><input id="precioHistBuscar" placeholder="Código o artículo..."></div>
+        <div class="field smallfield"><button class="btn btn-primary" style="width:100%" onclick="renderHistorialPrecios()">Buscar</button></div>
+      </div>
+      <div class="table-wrap" style="max-height:65vh">
+        <table>
+          <thead><tr><th>Fecha</th><th>Hora</th><th>Código</th><th>Artículo</th><th class="num">Costo</th><th class="num">% Gan.</th><th class="num">Precio anterior</th><th class="num">Precio nuevo</th><th>Motivo</th></tr></thead>
+          <tbody id="tablaHistorialPrecios"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+ </section>
  <section id="informes" class="page">
   <div class="panel">
     <h2 style="margin-top:0">Ventas registradas</h2>
@@ -535,11 +643,66 @@ const ARTICULOS=[...ARTICULOS_BASE,...getNuevosArticulos()];
 const byCode=new Map(), byBar=new Map();
 ARTICULOS.forEach(a=>{ if(a.codigo) byCode.set(String(a.codigo).toLowerCase(),a); if(a.barra) byBar.set(String(a.barra),a); });
 aplicarCostosGuardados();
+aplicarPreciosGuardados();
 
 const STOCK_KEY='gestion_comercial_stock_v1';
 const STOCK_MOV_KEY='gestion_comercial_stock_movimientos_v1';
 
 const COST_KEY='gestion_comercial_costos_v1';
+
+const PRICE_KEY='gestion_comercial_precios_v1';
+const PRICE_HISTORY_KEY='gestion_comercial_precios_historial_v1';
+function getPreciosGuardados(){
+  try{return JSON.parse(localStorage.getItem(PRICE_KEY)||'{}')}catch(e){return{}}
+}
+function savePreciosGuardados(v){localStorage.setItem(PRICE_KEY,JSON.stringify(v))}
+function getHistorialPrecios(){
+  try{return JSON.parse(localStorage.getItem(PRICE_HISTORY_KEY)||'[]')}catch(e){return[]}
+}
+function saveHistorialPrecios(v){localStorage.setItem(PRICE_HISTORY_KEY,JSON.stringify(v))}
+function aplicarPreciosGuardados(){
+  const p=getPreciosGuardados();
+  ARTICULOS.forEach(a=>{
+    const k=String(a.codigo||a.barra||a.descripcion);
+    if(p[k]){
+      if(p[k].precio!=null)a.precio=Number(p[k].precio);
+      if(p[k].ganancia!=null)a.ganancia=Number(p[k].ganancia);
+    }
+  });
+}
+function guardarPrecioArticulo(a,precio,ganancia,motivo='Actualización manual'){
+  const anterior=Number(a.precio||0);
+  a.precio=Number(precio||0);
+  a.ganancia=Number(ganancia||0);
+  const p=getPreciosGuardados();
+  p[String(a.codigo||a.barra||a.descripcion)]={precio:a.precio,ganancia:a.ganancia};
+  savePreciosGuardados(p);
+
+  const nuevos=getNuevosArticulos();
+  const idx=nuevos.findIndex(n=>String(n.codigo)===String(a.codigo));
+  if(idx>=0){
+    nuevos[idx].precio=a.precio;
+    nuevos[idx].ganancia=a.ganancia;
+    saveNuevosArticulos(nuevos);
+  }
+
+  if(Math.abs(anterior-a.precio)>=0.005){
+    const d=new Date(),h=getHistorialPrecios();
+    h.push({
+      fecha:fechaLocalISO(d),
+      hora:d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+      codigo:a.codigo||'',
+      descripcion:a.descripcion||'',
+      costo:Number(a.costo||0),
+      ganancia:Number(a.ganancia||0),
+      precioAnterior:anterior,
+      precioNuevo:Number(a.precio||0),
+      motivo
+    });
+    saveHistorialPrecios(h);
+  }
+}
+
 const PURCHASE_KEY='gestion_comercial_compras_v1';
 
 const PROVIDER_KEY='gestion_comercial_proveedores_v1';
@@ -647,7 +810,7 @@ let items=[],medioPago='Efectivo',seleccionado=null,suggestionIndex=-1,filteredS
 
 function dinero(n){return new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2}).format(Number(n||0))}
 function norm(s){return String(s||'').trim().toLowerCase()}
-function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.dataset.page===id));if(id==='articulos'){document.getElementById('articuloFormulario').style.display='none';document.getElementById('articulosListado').style.display='block';renderArticulos(document.getElementById('filtroArticulos').value);}if(id==='stock'){renderStock();actualizarResumenStock()}if(id==='compras'){cancelarNuevaCompra();renderCompras()}if(id==='proveedores')renderProveedores();if(id==='caja')renderCaja();if(id==='informes')actualizarResumenVentas()}
+function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.dataset.page===id));if(id==='articulos'){document.getElementById('articuloFormulario').style.display='none';document.getElementById('articulosListado').style.display='block';renderArticulos(document.getElementById('filtroArticulos').value);}if(id==='stock'){renderStock();actualizarResumenStock()}if(id==='compras'){cancelarNuevaCompra();renderCompras()}if(id==='proveedores')renderProveedores();if(id==='caja')renderCaja();if(id==='precios'){prepararFiltrosPrecios();renderPrecios()}if(id==='informes')actualizarResumenVentas()}
 document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>showPage(a.dataset.page)));
 document.getElementById('kpiArt').textContent=ARTICULOS.length.toLocaleString('es-AR');
 
@@ -1221,16 +1384,7 @@ function guardarCompra(){
     registrarMovStock(a,'COMPRA',anterior,Number(x.cantidad||0),nuevo,`${compra.tipo} ${compra.sucursal||''}-${compra.numeroComprobante||''} · ${proveedor}`);
     if(actualizarCosto){
       setCostoArticulo(a,Number(x.costo||0));
-      a.ganancia=Number(x.ganancia||0);
-      a.precio=Number(x.nuevoPrecio||0);
-      const nuevos=getNuevosArticulos();
-      const idx=nuevos.findIndex(n=>String(n.codigo)===String(a.codigo));
-      if(idx>=0){
-        nuevos[idx].costo=a.costo;
-        nuevos[idx].ganancia=a.ganancia;
-        nuevos[idx].precio=a.precio;
-        saveNuevosArticulos(nuevos);
-      }
+      guardarPrecioArticulo(a,Number(x.nuevoPrecio||0),Number(x.ganancia||0),'Actualización por compra');
     }
   });
 
@@ -1306,6 +1460,122 @@ function registrarMovimientoCaja(){const s=getCajaSesion();if(!s){alert('Primero
 function mostrarCierreCaja(){const r=resumenCaja();if(!r.s)return;document.getElementById('cajaCierreEsperado').textContent=dinero(r.efectivoEsperado);document.getElementById('cajaCierreContado').value='';document.getElementById('cajaCierreDiferencia').textContent=dinero(0);document.getElementById('modalCierreCaja').style.display='flex'}function cerrarModalCierre(){document.getElementById('modalCierreCaja').style.display='none'}function actualizarDiferenciaCierre(){const r=resumenCaja(),contado=Number(document.getElementById('cajaCierreContado').value||0),dif=contado-r.efectivoEsperado,el=document.getElementById('cajaCierreDiferencia');el.textContent=dinero(dif);el.className=Math.abs(dif)<.01?'caja-diff-ok':'caja-diff-bad'}
 function confirmarCierreCaja(){const r=resumenCaja();if(!r.s)return;const campo=document.getElementById('cajaCierreContado');if(campo.value===''){alert('Ingresá el efectivo contado.');return}const contado=Number(campo.value||0),d=new Date(),cierres=getCajaCierres();cierres.push({sesionId:r.s.id,fecha:r.s.fecha,horaApertura:r.s.horaApertura,horaCierre:d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}),fondoInicial:r.fondo,ventasEfectivo:r.porPago.Efectivo||0,ingresos:r.ingresos,gastos:r.gastos,retiros:r.retiros,esperado:r.efectivoEsperado,contado,diferencia:contado-r.efectivoEsperado,totalVentas:r.totalVentas});saveCajaCierres(cierres);saveCajaSesion(null);cerrarModalCierre();renderCaja();alert('Caja cerrada correctamente.')}
 function renderCaja(){const r=resumenCaja(),set=(id,val)=>{const e=document.getElementById(id);if(e)e.textContent=val},abierta=!!r.s;set('cajaEstadoTexto',abierta?('Caja abierta desde '+r.s.horaApertura+' · '+r.s.fecha):'Caja cerrada');const ba=document.getElementById('btnAbrirCaja'),bc=document.getElementById('btnCerrarCaja');if(ba)ba.style.display=abierta?'none':'inline-block';if(bc)bc.style.display=abierta?'inline-block':'none';set('cajaFondo',dinero(r.fondo));set('cajaVentasEfectivo',dinero(r.porPago.Efectivo||0));set('cajaIngresos',dinero(r.ingresos));set('cajaEgresos',dinero(r.gastos+r.retiros));set('cajaEsperado',dinero(r.efectivoEsperado));set('cajaPagoEfectivo',dinero(r.porPago.Efectivo||0));set('cajaPagoMP',dinero(r.porPago['Mercado Pago']||0));set('cajaPagoTransferencia',dinero(r.porPago.Transferencia||0));set('cajaPagoTarjeta',dinero(r.porPago.Tarjeta||0));set('cajaPagoTotal',dinero(r.totalVentas));const tb=document.getElementById('tablaMovCaja');if(tb){const m=r.movs.slice().reverse();tb.innerHTML=m.length?m.map(x=>'<tr><td>'+esc(x.hora)+'</td><td><span class="badge">'+esc(x.tipo)+'</span></td><td>'+esc(x.detalle)+'</td><td class="num">'+dinero(x.importe)+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">No hay movimientos en la caja actual</td></tr>'}const tc=document.getElementById('tablaCierresCaja');if(tc){const z=getCajaCierres().slice().reverse();tc.innerHTML=z.length?z.map(x=>'<tr><td>'+esc(x.fecha)+'</td><td>'+esc(x.horaApertura)+'</td><td>'+esc(x.horaCierre)+'</td><td class="num">'+dinero(x.esperado)+'</td><td class="num">'+dinero(x.contado)+'</td><td class="num '+(Math.abs(Number(x.diferencia||0))<.01?'caja-diff-ok':'caja-diff-bad')+'">'+dinero(x.diferencia)+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">Todavía no hay cierres de caja</td></tr>'}}
+
+
+let preciosVisibles=[];
+
+function redondearPrecio(valor,multiplo){
+  valor=Number(valor||0); multiplo=Number(multiplo||0);
+  if(!multiplo)return valor;
+  return Math.ceil(valor/multiplo)*multiplo;
+}
+function sugeridoArticulo(a,ganancia){
+  const base=calcularPrecioVentaDesdeCosto(Number(a.costo||0),Number(a.iva||0),Number(ganancia||0));
+  return redondearPrecio(base,Number((document.getElementById('precioRedondeo')||{}).value||0));
+}
+function prepararFiltrosPrecios(){
+  const prov=document.getElementById('precioProveedor'),rub=document.getElementById('precioRubro');
+  if(!prov||!rub)return;
+  const pv=[...new Set(ARTICULOS.map(a=>String(a.proveedor||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const rv=[...new Set(ARTICULOS.map(a=>String(a.rubro||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const pvActual=prov.value,rvActual=rub.value;
+  prov.innerHTML='<option value="">Todos</option>'+pv.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  rub.innerHTML='<option value="">Todos</option>'+rv.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  if(pv.includes(pvActual))prov.value=pvActual;
+  if(rv.includes(rvActual))rub.value=rvActual;
+}
+function renderPrecios(){
+  const q=norm((document.getElementById('precioBuscar')||{}).value||'');
+  const prov=(document.getElementById('precioProveedor')||{}).value||'';
+  const rub=(document.getElementById('precioRubro')||{}).value||'';
+  preciosVisibles=ARTICULOS.filter(a=>
+    (!q||norm(a.codigo).includes(q)||norm(a.barra).includes(q)||norm(a.descripcion).includes(q)) &&
+    (!prov||String(a.proveedor||'')===prov) &&
+    (!rub||String(a.rubro||'')===rub)
+  );
+  const lista=preciosVisibles.slice(0,500);
+  let revisar=0,valorCosto=0,valorVenta=0;
+  preciosVisibles.forEach(a=>{
+    const gan=a.ganancia==null?0:Number(a.ganancia);
+    const sug=sugeridoArticulo(a,gan);
+    if(Math.abs(sug-Number(a.precio||0))>=1)revisar++;
+    const st=getStockActual(a);
+    valorCosto+=st*Number(a.costo||0);
+    valorVenta+=st*Number(a.precio||0);
+  });
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+  set('precioKpiArt',preciosVisibles.length.toLocaleString('es-AR'));
+  set('precioKpiRevisar',revisar.toLocaleString('es-AR'));
+  set('precioKpiCosto',dinero(valorCosto));
+  set('precioKpiVenta',dinero(valorVenta));
+
+  const tb=document.getElementById('tablaPrecios');
+  if(!tb)return;
+  tb.innerHTML=lista.length?lista.map(a=>{
+    const gan=a.ganancia==null?0:Number(a.ganancia);
+    const sug=sugeridoArticulo(a,gan),actual=Number(a.precio||0),dif=sug-actual;
+    const cls=dif>0.5?'price-up':dif<-0.5?'price-down':'price-same';
+    return `<tr>
+      <td><input type="checkbox" class="precio-check" data-codigo="${esc(a.codigo)}"></td>
+      <td>${esc(a.codigo)}</td><td>${esc(a.descripcion)}</td><td>${esc(a.proveedor||'')}</td>
+      <td class="num">${dinero(a.costo)}</td><td class="num">${Number(a.iva||0).toLocaleString('es-AR')}%</td>
+      <td class="num"><input class="price-input precio-gan" data-codigo="${esc(a.codigo)}" type="number" min="0" step="0.01" value="${gan.toFixed(2)}" oninput="actualizarSugeridoFila('${String(a.codigo).replace(/'/g,"\\'")}')"></td>
+      <td class="num">${dinero(actual)}</td>
+      <td class="num price-suggest" id="psug_${esc(a.codigo)}">${dinero(sug)}</td>
+      <td class="num ${cls}" id="pdif_${esc(a.codigo)}">${dif>=0?'+':''}${dinero(dif)}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="10" class="empty">No hay artículos para el filtro seleccionado</td></tr>';
+  if(preciosVisibles.length>500)tb.innerHTML+=`<tr><td colspan="10" class="small">Se muestran los primeros 500 resultados. Usá los filtros para acotar la lista.</td></tr>`;
+  const ch=document.getElementById('precioCheckTodos'); if(ch)ch.checked=false;
+}
+function obtenerGananciaFila(codigo){
+  const el=[...document.querySelectorAll('.precio-gan')].find(x=>String(x.dataset.codigo)===String(codigo));
+  const a=byCode.get(norm(codigo));
+  return el?Number(el.value||0):(a&&a.ganancia!=null?Number(a.ganancia):0);
+}
+function actualizarSugeridoFila(codigo){
+  const a=byCode.get(norm(codigo));if(!a)return;
+  const gan=obtenerGananciaFila(codigo),sug=sugeridoArticulo(a,gan),dif=sug-Number(a.precio||0);
+  const s=document.getElementById('psug_'+codigo),d=document.getElementById('pdif_'+codigo);
+  if(s)s.textContent=dinero(sug);
+  if(d){d.textContent=(dif>=0?'+':'')+dinero(dif);d.className='num '+(dif>0.5?'price-up':dif<-0.5?'price-down':'price-same')}
+}
+function recalcularPreciosVisibles(){
+  document.querySelectorAll('.precio-gan').forEach(el=>actualizarSugeridoFila(el.dataset.codigo));
+}
+function toggleTodosPrecios(v){document.querySelectorAll('.precio-check').forEach(x=>x.checked=v)}
+function aplicarPreciosSeleccionados(){
+  const checks=[...document.querySelectorAll('.precio-check:checked')];
+  if(!checks.length){alert('Seleccioná al menos un artículo.');return}
+  if(!confirm(`¿Aplicar los nuevos precios a ${checks.length} artículo(s)?`))return;
+  checks.forEach(ch=>{
+    const a=byCode.get(norm(ch.dataset.codigo));if(!a)return;
+    const gan=obtenerGananciaFila(a.codigo),nuevo=sugeridoArticulo(a,gan);
+    guardarPrecioArticulo(a,nuevo,gan,'Módulo Precios');
+  });
+  renderPrecios();
+  renderArticulos();
+  renderStock();
+  alert('Precios actualizados correctamente.');
+}
+function showPrecioTab(tab){
+  const act=tab==='actualizar';
+  document.getElementById('precioActualizar').classList.toggle('active',act);
+  document.getElementById('precioHistorial').classList.toggle('active',!act);
+  document.getElementById('tabPrecioActualizar').classList.toggle('active',act);
+  document.getElementById('tabPrecioHistorial').classList.toggle('active',!act);
+  if(act)renderPrecios();else renderHistorialPrecios();
+}
+function renderHistorialPrecios(){
+  const q=norm((document.getElementById('precioHistBuscar')||{}).value||'');
+  const h=getHistorialPrecios().slice().reverse().filter(x=>!q||norm(x.codigo).includes(q)||norm(x.descripcion).includes(q));
+  const tb=document.getElementById('tablaHistorialPrecios');if(!tb)return;
+  tb.innerHTML=h.length?h.slice(0,1000).map(x=>`<tr>
+    <td>${esc(x.fecha)}</td><td>${esc(x.hora)}</td><td>${esc(x.codigo)}</td><td>${esc(x.descripcion)}</td>
+    <td class="num">${dinero(x.costo)}</td><td class="num">${Number(x.ganancia||0).toLocaleString('es-AR',{maximumFractionDigits:2})}%</td>
+    <td class="num">${dinero(x.precioAnterior)}</td><td class="num">${dinero(x.precioNuevo)}</td><td>${esc(x.motivo||'')}</td>
+  </tr>`).join(''):'<tr><td colspan="9" class="empty">Todavía no hay cambios de precios registrados</td></tr>';
+}
 
 function showStockTab(tab){
   const listado=tab==='listado';
@@ -1406,6 +1676,18 @@ renderProveedorDatalist();
 renderProveedores();
 
 document.getElementById("cajaCierreContado")?.addEventListener("input",actualizarDiferenciaCierre);
+
+const pb=document.getElementById('precioBuscar');
+if(pb)pb.addEventListener('input',renderPrecios);
+const pp=document.getElementById('precioProveedor');
+if(pp)pp.addEventListener('change',renderPrecios);
+const pr=document.getElementById('precioRubro');
+if(pr)pr.addEventListener('change',renderPrecios);
+const pred=document.getElementById('precioRedondeo');
+if(pred)pred.addEventListener('change',renderPrecios);
+const ph=document.getElementById('precioHistBuscar');
+if(ph)ph.addEventListener('input',renderHistorialPrecios);
+
 </script>
 </body>
 </html>
