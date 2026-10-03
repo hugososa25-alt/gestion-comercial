@@ -411,7 +411,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
           <input id="pcProveedor" list="listaProveedoresData" placeholder="Seleccionar proveedor">
         </div>
         <div>
-          <label>Actualizar costo del artículo</label>
+          <label>Actualizar costo y precio del artículo</label>
           <select id="pcActualizarCosto">
             <option value="si" selected>Sí</option>
             <option value="no">No</option>
@@ -443,7 +443,11 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
         </div>
         <div>
           <label>% ganancia</label>
-          <input id="pcGanancia" type="number" min="0" step="0.01" placeholder="%">
+          <input id="pcGanancia" type="number" step="0.01" placeholder="%">
+        </div>
+        <div>
+          <label>Precio de venta</label>
+          <input id="pcPrecioVenta" type="number" min="0" step="0.01" placeholder="0,00">
         </div>
         <div>
           <button class="btn btn-primary" onclick="agregarItemCompra()">+ Agregar</button>
@@ -487,7 +491,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
     <div class="price-head">
       <div>
         <h2 style="margin:0">Precios</h2>
-        <div class="small" style="margin-top:5px">Actualización de precios según costo sin IVA, IVA y porcentaje de ganancia.</div>
+        <div class="small" style="margin-top:5px">Edición manual de costo, precio de venta y porcentaje de ganancia. Los cambios también se actualizan desde Compras.</div>
       </div>
     </div>
 
@@ -533,7 +537,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
       </div>
 
       <div class="calc-note" style="margin-bottom:12px">
-        Fórmula: <b>costo sin IVA × (1 + IVA) × (1 + % ganancia)</b>. Podés cambiar el porcentaje por artículo y luego aplicar el precio sugerido.
+        Podés editar <b>Costo s/IVA</b>, <b>% Gan.</b> o <b>Precio de venta</b>. Si cambiás costo o precio, el sistema calcula automáticamente el % de ganancia. Si cambiás el %, recalcula el precio de venta.
       </div>
 
       <div class="table-wrap" style="max-height:62vh">
@@ -543,8 +547,8 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
               <th style="width:36px"><input id="precioCheckTodos" type="checkbox" onclick="toggleTodosPrecios(this.checked)"></th>
               <th>Código</th><th>Artículo</th><th>Proveedor</th>
               <th class="num">Costo s/IVA</th><th class="num">IVA</th>
-              <th class="num">% Gan.</th><th class="num">Precio actual</th>
-              <th class="num">Precio sugerido</th><th class="num">Diferencia</th>
+              <th class="num">% Gan.</th><th class="num">Precio de venta</th>
+              <th class="num">Precio calculado</th><th class="num">Diferencia</th>
             </tr>
           </thead>
           <tbody id="tablaPrecios"></tbody>
@@ -553,7 +557,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
 
       <div class="price-actions">
         <button class="btn" style="border:1px solid var(--borde);background:white" onclick="recalcularPreciosVisibles()">Recalcular sugeridos</button>
-        <button class="btn btn-primary" onclick="aplicarPreciosSeleccionados()">APLICAR PRECIOS SELECCIONADOS</button>
+        <button class="btn btn-primary" onclick="aplicarPreciosSeleccionados()">GUARDAR COSTO / PRECIO SELECCIONADOS</button>
       </div>
     </div>
 
@@ -691,8 +695,9 @@ function aplicarPreciosGuardados(){
     }
   });
 }
-function guardarPrecioArticulo(a,precio,ganancia,motivo='Actualización manual'){
+function guardarPrecioArticulo(a,precio,ganancia,motivo='Actualización manual',costoAnterior=null){
   const anterior=Number(a.precio||0);
+  const costoPrevio=costoAnterior==null?Number(a.costo||0):Number(costoAnterior||0);
   a.precio=Number(precio||0);
   a.ganancia=Number(ganancia||0);
   const p=getPreciosGuardados();
@@ -707,7 +712,8 @@ function guardarPrecioArticulo(a,precio,ganancia,motivo='Actualización manual')
     saveNuevosArticulos(nuevos);
   }
 
-  if(Math.abs(anterior-a.precio)>=0.005){
+  const costoActual=Number(a.costo||0);
+  if(Math.abs(anterior-a.precio)>=0.005 || Math.abs(costoPrevio-costoActual)>=0.005){
     const d=new Date(),h=getHistorialPrecios();
     h.push({
       fecha:fechaLocalISO(d),
@@ -718,7 +724,7 @@ function guardarPrecioArticulo(a,precio,ganancia,motivo='Actualización manual')
       ganancia:Number(a.ganancia||0),
       precioAnterior:anterior,
       precioNuevo:Number(a.precio||0),
-      motivo
+      motivo:Math.abs(costoPrevio-costoActual)>=0.005?`${motivo} · Costo ${dinero(costoPrevio)} → ${dinero(costoActual)}`:motivo
     });
     saveHistorialPrecios(h);
   }
@@ -1323,6 +1329,7 @@ function limpiarCargaItemCompra(){
   document.getElementById('pcCosto').value='';
   document.getElementById('pcIva').value='21';
   document.getElementById('pcGanancia').value='';
+  const ppv=document.getElementById('pcPrecioVenta');if(ppv)ppv.value='';
   compraArticuloSeleccionado=null;
   const s=document.getElementById('pcSuggestions'); if(s)s.style.display='none';
 }
@@ -1354,6 +1361,7 @@ function seleccionarArticuloCompra(a){
   document.getElementById('pcCosto').value=Number(a.costo||0).toFixed(2);
   document.getElementById('pcIva').value=Number(a.iva||21);
   document.getElementById('pcGanancia').value=a.ganancia==null?'':Number(a.ganancia).toFixed(2);
+  document.getElementById('pcPrecioVenta').value=Number(a.precio||0).toFixed(2);
   document.getElementById('pcSuggestions').style.display='none';
   const q=document.getElementById('pcCantidad'); q.focus(); q.select();
 }
@@ -1368,11 +1376,15 @@ function agregarItemCompra(){
   const costo=Number(document.getElementById('pcCosto').value||0);
   const iva=Number(document.getElementById('pcIva').value||0);
   const gananciaTxt=document.getElementById('pcGanancia').value;
-  const ganancia=gananciaTxt===''?(a.ganancia==null?0:Number(a.ganancia)):Number(gananciaTxt);
+  let ganancia=gananciaTxt===''?(a.ganancia==null?0:Number(a.ganancia)):Number(gananciaTxt);
+  let nuevoPrecio=Number(document.getElementById('pcPrecioVenta').value||0);
   if(cant<=0){alert('Ingresá una cantidad válida.');return}
   if(costo<0){alert('Ingresá un costo válido.');return}
-  if(!Number.isFinite(ganancia)||ganancia<0){alert('Ingresá un porcentaje de ganancia válido.');return}
-  const nuevoPrecio=calcularPrecioVentaDesdeCosto(costo,iva,ganancia);
+  if(nuevoPrecio<0){alert('Ingresá un precio de venta válido.');return}
+  const ganCalc=calcularGananciaDesdePrecio(costo,iva,nuevoPrecio);
+  if(ganCalc!=null && Number.isFinite(ganCalc)) ganancia=ganCalc;
+  else if(!Number.isFinite(ganancia)) ganancia=0;
+  if(nuevoPrecio<=0 && costo>0) nuevoPrecio=calcularPrecioVentaDesdeCosto(costo,iva,ganancia);
 
   compraItems.push({
     codigo:a.codigo,
@@ -1400,9 +1412,11 @@ function renderItemsCompra(){
     <td>${esc(x.codigo)}</td><td>${esc(x.descripcion)}</td>
     <td class="num">${Number(x.cantidad).toLocaleString('es-AR',{maximumFractionDigits:2})}</td>
     <td class="num">${dinero(x.costo)}</td><td class="num">${Number(x.iva).toLocaleString('es-AR')}%</td>
+    <td class="num">${Number(x.ganancia||0).toLocaleString('es-AR',{maximumFractionDigits:2})}%</td>
+    <td class="num">${dinero(x.nuevoPrecio||0)}</td>
     <td class="num">${dinero(x.subtotal)}</td>
     <td><button class="btn btn-danger" style="padding:7px 10px" onclick="eliminarItemCompra(${i})">Eliminar</button></td>
-  </tr>`).join(''):'<tr><td colspan="7" class="empty">Todavía no hay artículos en la compra</td></tr>';
+  </tr>`).join(''):'<tr><td colspan="9" class="empty">Todavía no hay artículos en la compra</td></tr>';
   const total=compraItems.reduce((s,x)=>s+Number(x.subtotal||0),0);
   document.getElementById('pcTotal').textContent=dinero(total);
 }
@@ -1441,8 +1455,10 @@ function guardarCompra(){
     setStockActual(a,nuevo);
     registrarMovStock(a,'COMPRA',anterior,Number(x.cantidad||0),nuevo,`${compra.tipo} ${compra.sucursal||''}-${compra.numeroComprobante||''} · ${proveedor}`);
     if(actualizarCosto){
+      const costoAnterior=Number(a.costo||0);
       setCostoArticulo(a,Number(x.costo||0));
-      guardarPrecioArticulo(a,Number(x.nuevoPrecio||0),Number(x.ganancia||0),'Actualización por compra');
+      guardarPrecioArticulo(a,Number(x.nuevoPrecio||0),Number(x.ganancia||0),'Actualización por compra',costoAnterior);
+      cloudUpdateArticuloComercial(a);
     }
   });
 
@@ -1626,12 +1642,14 @@ function renderPrecios(){
     const gan=a.ganancia==null?0:Number(a.ganancia);
     const sug=sugeridoArticulo(a,gan),actual=Number(a.precio||0),dif=sug-actual;
     const cls=dif>0.5?'price-up':dif<-0.5?'price-down':'price-same';
+    const code=String(a.codigo).replace(/'/g,"\\'");
     return `<tr>
       <td><input type="checkbox" class="precio-check" data-codigo="${esc(a.codigo)}"></td>
       <td>${esc(a.codigo)}</td><td>${esc(a.descripcion)}</td><td>${esc(a.proveedor||'')}</td>
-      <td class="num">${dinero(a.costo)}</td><td class="num">${Number(a.iva||0).toLocaleString('es-AR')}%</td>
-      <td class="num"><input class="price-input precio-gan" data-codigo="${esc(a.codigo)}" type="number" min="0" step="0.01" value="${gan.toFixed(2)}" oninput="actualizarSugeridoFila('${String(a.codigo).replace(/'/g,"\\'")}')"></td>
-      <td class="num">${dinero(actual)}</td>
+      <td class="num"><input class="price-input precio-costo" data-codigo="${esc(a.codigo)}" type="number" min="0" step="0.01" value="${Number(a.costo||0).toFixed(2)}" oninput="recalcularGananciaDesdeFila('${code}')"></td>
+      <td class="num">${Number(a.iva||0).toLocaleString('es-AR')}%</td>
+      <td class="num"><input class="price-input precio-gan" data-codigo="${esc(a.codigo)}" type="number" step="0.01" value="${gan.toFixed(2)}" oninput="recalcularPrecioDesdeGananciaFila('${code}')"></td>
+      <td class="num"><input class="price-input precio-venta" data-codigo="${esc(a.codigo)}" type="number" min="0" step="0.01" value="${actual.toFixed(2)}" oninput="recalcularGananciaDesdeFila('${code}')"></td>
       <td class="num price-suggest" id="psug_${esc(a.codigo)}">${dinero(sug)}</td>
       <td class="num ${cls}" id="pdif_${esc(a.codigo)}">${dif>=0?'+':''}${dinero(dif)}</td>
     </tr>`;
@@ -1639,35 +1657,70 @@ function renderPrecios(){
   if(preciosVisibles.length>500)tb.innerHTML+=`<tr><td colspan="10" class="small">Se muestran los primeros 500 resultados. Usá los filtros para acotar la lista.</td></tr>`;
   const ch=document.getElementById('precioCheckTodos'); if(ch)ch.checked=false;
 }
+function campoPrecioFila(codigo,clase){
+  return [...document.querySelectorAll('.'+clase)].find(x=>String(x.dataset.codigo)===String(codigo));
+}
+function obtenerCostoFila(codigo){
+  const el=campoPrecioFila(codigo,'precio-costo'),a=byCode.get(norm(codigo));
+  return el?Number(el.value||0):Number(a?.costo||0);
+}
 function obtenerGananciaFila(codigo){
-  const el=[...document.querySelectorAll('.precio-gan')].find(x=>String(x.dataset.codigo)===String(codigo));
-  const a=byCode.get(norm(codigo));
+  const el=campoPrecioFila(codigo,'precio-gan'),a=byCode.get(norm(codigo));
   return el?Number(el.value||0):(a&&a.ganancia!=null?Number(a.ganancia):0);
 }
-function actualizarSugeridoFila(codigo){
+function obtenerPrecioVentaFila(codigo){
+  const el=campoPrecioFila(codigo,'precio-venta'),a=byCode.get(norm(codigo));
+  return el?Number(el.value||0):Number(a?.precio||0);
+}
+function actualizarIndicadoresFila(codigo){
   const a=byCode.get(norm(codigo));if(!a)return;
-  const gan=obtenerGananciaFila(codigo),sug=sugeridoArticulo(a,gan),dif=sug-Number(a.precio||0);
+  const costo=obtenerCostoFila(codigo),gan=obtenerGananciaFila(codigo),venta=obtenerPrecioVentaFila(codigo);
+  const base=calcularPrecioVentaDesdeCosto(costo,Number(a.iva||0),gan);
+  const sug=redondearPrecio(base,Number((document.getElementById('precioRedondeo')||{}).value||0));
+  const dif=sug-venta;
   const s=document.getElementById('psug_'+codigo),d=document.getElementById('pdif_'+codigo);
   if(s)s.textContent=dinero(sug);
   if(d){d.textContent=(dif>=0?'+':'')+dinero(dif);d.className='num '+(dif>0.5?'price-up':dif<-0.5?'price-down':'price-same')}
 }
+function recalcularGananciaDesdeFila(codigo){
+  const a=byCode.get(norm(codigo));if(!a)return;
+  const costo=obtenerCostoFila(codigo),venta=obtenerPrecioVentaFila(codigo);
+  const gan=calcularGananciaDesdePrecio(costo,Number(a.iva||0),venta);
+  const g=campoPrecioFila(codigo,'precio-gan');
+  if(g && gan!=null && Number.isFinite(gan))g.value=gan.toFixed(2);
+  actualizarIndicadoresFila(codigo);
+}
+function recalcularPrecioDesdeGananciaFila(codigo){
+  const a=byCode.get(norm(codigo));if(!a)return;
+  const costo=obtenerCostoFila(codigo),gan=obtenerGananciaFila(codigo);
+  const base=calcularPrecioVentaDesdeCosto(costo,Number(a.iva||0),gan);
+  const venta=redondearPrecio(base,Number((document.getElementById('precioRedondeo')||{}).value||0));
+  const p=campoPrecioFila(codigo,'precio-venta');if(p)p.value=Number(venta||0).toFixed(2);
+  actualizarIndicadoresFila(codigo);
+}
+function actualizarSugeridoFila(codigo){actualizarIndicadoresFila(codigo)}
 function recalcularPreciosVisibles(){
-  document.querySelectorAll('.precio-gan').forEach(el=>actualizarSugeridoFila(el.dataset.codigo));
+  document.querySelectorAll('.precio-gan').forEach(el=>actualizarIndicadoresFila(el.dataset.codigo));
 }
 function toggleTodosPrecios(v){document.querySelectorAll('.precio-check').forEach(x=>x.checked=v)}
-function aplicarPreciosSeleccionados(){
+async function aplicarPreciosSeleccionados(){
   const checks=[...document.querySelectorAll('.precio-check:checked')];
   if(!checks.length){alert('Seleccioná al menos un artículo.');return}
-  if(!confirm(`¿Aplicar los nuevos precios a ${checks.length} artículo(s)?`))return;
-  checks.forEach(ch=>{
-    const a=byCode.get(norm(ch.dataset.codigo));if(!a)return;
-    const gan=obtenerGananciaFila(a.codigo),nuevo=sugeridoArticulo(a,gan);
-    guardarPrecioArticulo(a,nuevo,gan,'Módulo Precios');
-  });
-  renderPrecios();
-  renderArticulos();
-  renderStock();
-  alert('Precios actualizados correctamente.');
+  if(!confirm(`¿Guardar costo, precio de venta y % de ganancia de ${checks.length} artículo(s)?`))return;
+  for(const ch of checks){
+    const a=byCode.get(norm(ch.dataset.codigo));if(!a)continue;
+    const costo=obtenerCostoFila(a.codigo),venta=obtenerPrecioVentaFila(a.codigo);
+    let gan=obtenerGananciaFila(a.codigo);
+    const calc=calcularGananciaDesdePrecio(costo,Number(a.iva||0),venta);
+    if(calc!=null && Number.isFinite(calc))gan=calc;
+    if(!Number.isFinite(costo)||costo<0||!Number.isFinite(venta)||venta<0){alert(`Revisá costo/precio de ${a.descripcion}.`);return}
+    const costoAnterior=Number(a.costo||0);
+    setCostoArticulo(a,costo);
+    guardarPrecioArticulo(a,venta,gan,'Actualización manual en Precios',costoAnterior);
+    await cloudUpdateArticuloComercial(a);
+  }
+  renderPrecios();renderArticulos();renderStock();
+  alert('Costos y precios actualizados correctamente.');
 }
 function showPrecioTab(tab){
   const act=tab==='actualizar';
@@ -1821,7 +1874,10 @@ async function syncProveedoresArticulos(migracionInicial=false){
   const pm=await cloudProviderMap();
   const stock=getStockMap();
   const existentes=new Set((await sbAll('articulos','codigo','id')).map(r=>String(r.codigo)));
-  const payload=ARTICULOS.map(a=>{
+  const payload=ARTICULOS.filter(a=>{
+    const codigo=String(a.codigo||a.barra||a.descripcion);
+    return migracionInicial || !existentes.has(codigo);
+  }).map(a=>{
     const codigo=String(a.codigo||a.barra||a.descripcion);
     const row={
       codigo,
@@ -1921,6 +1977,26 @@ async function syncCaja(){
     m._remoteId=data.id; movChanged=true;
   }
   if(movChanged)localStorage.setItem(CAJA_MOV_KEY,JSON.stringify(movs));
+}
+async function cloudUpdateArticuloComercial(a){
+  if(!sb||!cloudEnabled()||cloudApplyingRemote)return false;
+  const codigo=String(a.codigo||a.barra||a.descripcion);
+  try{
+    const {error}=await sb.from('articulos').update({
+      costo:Number(a.costo||0),
+      iva:Number(a.iva||0),
+      ganancia:Number(a.ganancia||0),
+      precio:Number(a.precio||0),
+      actualizado_en:new Date().toISOString()
+    }).eq('codigo',codigo);
+    if(error)throw error;
+    cloudSetStatus('Conectado a Supabase · costo/precio actualizado');
+    return true;
+  }catch(e){
+    console.error('Error actualizando costo/precio en nube',e);
+    cloudSetStatus('Error al actualizar costo/precio: '+(e.message||e),'error');
+    return false;
+  }
 }
 async function cloudApplyStockDelta(a,delta){
   if(!sb||!cloudEnabled()||cloudApplyingRemote)return null;
@@ -2039,6 +2115,24 @@ renderCaja();
 renderCompras();
 setTimeout(iniciarNube,250);
 
+
+function recalcularCompraGanancia(){
+  const costo=Number((document.getElementById('pcCosto')||{}).value||0);
+  const iva=Number((document.getElementById('pcIva')||{}).value||0);
+  const precio=Number((document.getElementById('pcPrecioVenta')||{}).value||0);
+  const gan=calcularGananciaDesdePrecio(costo,iva,precio);
+  const g=document.getElementById('pcGanancia');
+  if(g && gan!=null && Number.isFinite(gan))g.value=gan.toFixed(2);
+}
+function recalcularCompraPrecio(){
+  const costo=Number((document.getElementById('pcCosto')||{}).value||0);
+  const iva=Number((document.getElementById('pcIva')||{}).value||0);
+  const gan=Number((document.getElementById('pcGanancia')||{}).value||0);
+  const p=document.getElementById('pcPrecioVenta');
+  if(p && costo>0 && Number.isFinite(gan))p.value=calcularPrecioVentaDesdeCosto(costo,iva,gan).toFixed(2);
+}
+['pcCosto','pcIva','pcPrecioVenta'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',recalcularCompraGanancia)});
+const pcg=document.getElementById('pcGanancia');if(pcg)pcg.addEventListener('input',recalcularCompraPrecio);
 
 ['naCosto','naIva','naGanancia'].forEach(id=>{
   const el=document.getElementById(id);
