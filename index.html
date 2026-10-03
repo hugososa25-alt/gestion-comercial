@@ -1720,7 +1720,7 @@ async function cloudProviderMap(){
   const rows=await sbAll('proveedores','id,nombre','id');
   return {rows,byName:new Map(rows.map(r=>[norm(r.nombre),r.id])),byId:new Map(rows.map(r=>[String(r.id),r.nombre]))};
 }
-async function syncProveedoresArticulos(){
+async function syncProveedoresArticulos(migracionInicial=false){
   const nombres=[...new Set([...getProveedores(),...ARTICULOS.map(a=>String(a.proveedor||'').trim()).filter(Boolean)])];
   if(nombres.length){
     for(let i=0;i<nombres.length;i+=300){
@@ -1730,15 +1730,23 @@ async function syncProveedoresArticulos(){
   }
   const pm=await cloudProviderMap();
   const stock=getStockMap();
-  const payload=ARTICULOS.map(a=>({
-    codigo:String(a.codigo||a.barra||a.descripcion),
-    codigo_barras:String(a.barra||'').trim()||null,
-    descripcion:String(a.descripcion||''),
-    rubro:String(a.rubro||'').trim()||null,
-    proveedor_id:a.proveedor?pm.byName.get(norm(a.proveedor))||null:null,
-    costo:Number(a.costo||0), iva:Number(a.iva||0), ganancia:Number(a.ganancia||0), precio:Number(a.precio||0),
-    stock:Number(stock[String(a.codigo||a.barra||a.descripcion)]??0), activo:true, actualizado_en:new Date().toISOString()
-  }));
+  const existentes=new Set((await sbAll('articulos','codigo','id')).map(r=>String(r.codigo)));
+  const payload=ARTICULOS.map(a=>{
+    const codigo=String(a.codigo||a.barra||a.descripcion);
+    const row={
+      codigo,
+      codigo_barras:String(a.barra||'').trim()||null,
+      descripcion:String(a.descripcion||''),
+      rubro:String(a.rubro||'').trim()||null,
+      proveedor_id:a.proveedor?pm.byName.get(norm(a.proveedor))||null:null,
+      costo:Number(a.costo||0), iva:Number(a.iva||0), ganancia:Number(a.ganancia||0), precio:Number(a.precio||0),
+      activo:true, actualizado_en:new Date().toISOString()
+    };
+    // El stock solo se envía en la migración inicial o al crear un artículo nuevo.
+    // Así una PC con datos viejos no pisa el stock actualizado por otra PC.
+    if(migracionInicial || !existentes.has(codigo)) row.stock=Number(stock[codigo]??0);
+    return row;
+  });
   for(let i=0;i<payload.length;i+=250){
     const {error}=await sb.from('articulos').upsert(payload.slice(i,i+250),{onConflict:'codigo'});
     if(error)throw error;
@@ -1824,15 +1832,37 @@ async function syncCaja(){
   }
   if(movChanged)localStorage.setItem(CAJA_MOV_KEY,JSON.stringify(movs));
 }
+async function cloudApplyStockDelta(a,delta){
+  if(!sb||!cloudEnabled()||cloudApplyingRemote)return null;
+  const codigo=String(a.codigo||a.barra||a.descripcion);
+  try{
+    const {data,error}=await sb.rpc('ajustar_stock',{p_codigo:codigo,p_delta:Number(delta||0)});
+    if(error)throw error;
+    const nuevo=Array.isArray(data)?Number(data[0]?.stock_nuevo):Number(data?.stock_nuevo??data);
+    if(Number.isFinite(nuevo)){
+      // Actualiza cache local sin disparar otra sincronización.
+      const mapa=getStockMap(); mapa[codigo]=nuevo; _saveStockMap? _saveStockMap(mapa) : localStorage.setItem(STOCK_KEY,JSON.stringify(mapa));
+      a.stock=nuevo;
+      if(document.getElementById('stock')?.classList.contains('active')){renderStock();actualizarResumenStock();}
+    }
+    cloudSetStatus('Conectado a Supabase · stock actualizado en la nube');
+    return nuevo;
+  }catch(e){
+    console.error('Error actualizando stock en nube',e);
+    cloudSetStatus('Error al actualizar stock en nube: '+(e.message||e),'error');
+    return null;
+  }
+}
 async function sincronizarAhora(mostrar=false){
   if(!sb){cloudSetStatus('No se pudo cargar la conexión con Supabase.','error');return false}
   if(cloudSyncRunning)return false;
   cloudSyncRunning=true;
   try{
     cloudSetStatus('Sincronizando con la nube...');
-    await syncProveedoresArticulos();
+    await syncProveedoresArticulos(false);
     await syncVentas(); await syncCompras(); await syncMovStock(); await syncHistorialPrecios(); await syncCaja();
     localStorage.setItem(CLOUD_ENABLED_KEY,'1');
+    await actualizarDesdeNube(false);
     cloudSetStatus('Conectado a Supabase · datos sincronizados');
     if(mostrar)alert('Sincronización terminada correctamente.');
     return true;
@@ -1845,7 +1875,17 @@ function scheduleCloudSync(){
 }
 async function migrarDatosANube(){
   if(!confirm('Se copiarán a Supabase los datos actuales de ESTA PC: artículos, stock, ventas, compras, precios y caja.\n\nEsta operación no borra los datos locales. ¿Continuar?'))return;
-  const ok=await sincronizarAhora(true); if(ok)await actualizarDesdeNube(false);
+  if(!sb)return;
+  try{
+    cloudSyncRunning=true; cloudSetStatus('Realizando migración inicial...');
+    await syncProveedoresArticulos(true);
+    await syncVentas(); await syncCompras(); await syncMovStock(); await syncHistorialPrecios(); await syncCaja();
+    localStorage.setItem(CLOUD_ENABLED_KEY,'1');
+    await actualizarDesdeNube(false);
+    cloudSetStatus('Conectado a Supabase · migración inicial terminada');
+    alert('Migración terminada correctamente.');
+  }catch(e){console.error(e);cloudSetStatus('Error de migración: '+(e.message||e),'error');alert('No se pudo completar la migración.\n\n'+(e.message||e));}
+  finally{cloudSyncRunning=false}
 }
 async function actualizarDesdeNube(mostrar=false){
   if(!sb)return;
@@ -1894,8 +1934,9 @@ const _saveHistorialPrecios=saveHistorialPrecios;saveHistorialPrecios=function(v
 const _saveProveedores=saveProveedores;saveProveedores=function(v){_saveProveedores(v);scheduleCloudSync()};
 const _saveCostos=saveCostos;saveCostos=function(v){_saveCostos(v);scheduleCloudSync()};
 const _saveCompras=saveCompras;saveCompras=function(v){_saveCompras(v);scheduleCloudSync()};
-const _saveStockMap=saveStockMap;saveStockMap=function(v){_saveStockMap(v);scheduleCloudSync()};
+const _saveStockMap=saveStockMap;saveStockMap=function(v){_saveStockMap(v)};
 const _saveMovStock=saveMovStock;saveMovStock=function(v){_saveMovStock(v);scheduleCloudSync()};
+const _registrarMovStock=registrarMovStock;registrarMovStock=function(a,tipo,anterior,mov,nuevo,detalle=''){_registrarMovStock(a,tipo,anterior,mov,nuevo,detalle);cloudApplyStockDelta(a,Number(mov||0));};
 const _saveVentas=saveVentas;saveVentas=function(v){_saveVentas(v);scheduleCloudSync()};
 const _saveCajaSesion=saveCajaSesion;saveCajaSesion=function(v){_saveCajaSesion(v);scheduleCloudSync()};
 const _saveCajaMovimientos=saveCajaMovimientos;saveCajaMovimientos=function(v){_saveCajaMovimientos(v);scheduleCloudSync()};
