@@ -1081,8 +1081,11 @@ function renderHistorialVentas(){
       <td>${esc(v.hora)}</td>
       <td><span class="badge">${esc(v.medioPago)}</span></td>
       <td class="num">${cant}</td>
-      <td class="num"><b>${dinero(v.total)}</b></td>
-      <td><button class="btn" style="padding:7px 10px;border:1px solid var(--borde);background:white" onclick="toggleDetalleVenta('${v.numero}')">Ver</button></td>
+      <td class="num"><b>${dinero(v.total)}</b>${v.estado==='ANULADA'?'<div style="font-size:11px;color:#c62828;font-weight:700;margin-top:3px">ANULADA</div>':''}</td>
+      <td style="white-space:nowrap">
+        <button class="btn" style="padding:7px 10px;border:1px solid var(--borde);background:white" onclick="toggleDetalleVenta('${v.numero}')">Ver</button>
+        ${v.estado==='ANULADA'?'':`<button class="btn btn-danger" style="padding:7px 10px;margin-left:5px" onclick="anularVenta('${v.numero}')">Anular</button>`}
+      </td>
     </tr>
     <tr id="detalle_${v.numero}" class="sale-detail" style="display:none">
       <td colspan="7">
@@ -1091,8 +1094,42 @@ function renderHistorialVentas(){
     </tr>`;
   }).join('');
 }
-function actualizarResumenVentas(){
+async function anularVenta(numero){
   const ventas=getVentas();
+  const idx=ventas.findIndex(v=>String(v.numero)===String(numero));
+  if(idx<0){alert('No se encontró la venta.');return}
+  const v=ventas[idx];
+  if(v.estado==='ANULADA'){alert('Esta venta ya está anulada.');return}
+  const motivo=prompt('Motivo de la anulación:','Anulación de venta');
+  if(motivo===null)return;
+  if(!confirm(`Se anulará ${v.numero} por ${dinero(v.total)} y se repondrá el stock de todos sus artículos.\n\n¿Continuar?`))return;
+  try{
+    // Primero marcamos la venta como anulada en Supabase para evitar duplicaciones.
+    if(sb && v._remoteId){
+      const {error}=await sb.from('ventas').update({estado:'ANULADA',anulada_en:new Date().toISOString(),motivo_anulacion:motivo||'Anulación de venta'}).eq('id',v._remoteId);
+      if(error)throw error;
+    }
+    // Reponer stock artículo por artículo.
+    for(const x of (v.items||[])){
+      const a=byCode.get(norm(x.codigo)) || byBar.get(String(x.barra||'')) || ARTICULOS.find(z=>norm(z.descripcion)===norm(x.descripcion||x.nombre));
+      if(!a)continue;
+      const anterior=getStockActual(a), mov=Number(x.cantidad||0), nuevo=anterior+mov;
+      setStockActual(a,nuevo);
+      // Registra movimiento local y aplica el delta en Supabase.
+      _registrarMovStock(a,'ANULACION VENTA',anterior,mov,nuevo,`Anulación ${v.numero}${motivo?' · '+motivo:''}`);
+      await cloudApplyStockDelta(a,mov);
+    }
+    v.estado='ANULADA'; v.fechaAnulacion=new Date().toISOString(); v.motivoAnulacion=motivo||'Anulación de venta';
+    _saveVentas(ventas);
+    scheduleCloudSync();
+    renderHistorialVentas(); actualizarResumenVentas(); actualizarResumenStock();
+    alert(`Venta ${v.numero} anulada correctamente.\n\nEl stock fue repuesto.`);
+  }catch(e){console.error(e);alert('No se pudo anular la venta.\n\n'+(e.message||e));}
+}
+
+function actualizarResumenVentas(){
+  const ventasTodas=getVentas();
+  const ventas=ventasTodas.filter(v=>v.estado!=='ANULADA');
   const hoy=fechaLocalISO(new Date());
   const vh=ventas.filter(v=>v.fecha===hoy);
   const th=vh.reduce((s,v)=>s+Number(v.total||0),0);
@@ -1423,6 +1460,36 @@ function toggleDetalleCompra(numero){
   const row=document.getElementById('detcomp_'+numero);
   if(row)row.style.display=row.style.display==='none'?'table-row':'none';
 }
+async function eliminarCompra(numero){
+  const compras=getCompras();
+  const idx=compras.findIndex(c=>String(c.numeroCompra)===String(numero));
+  if(idx<0){alert('No se encontró la compra.');return}
+  const c=compras[idx];
+  const unidades=(c.items||[]).reduce((s,x)=>s+Number(x.cantidad||0),0);
+  if(!confirm(`Se eliminará la compra ${c.numeroCompra} por ${dinero(c.total)}.\n\nTambién se descontarán ${unidades} unidades del stock.\n\n¿Continuar?`))return;
+  try{
+    // Elimina primero la compra remota. La función SQL borra detalle + cabecera.
+    if(sb && c._remoteId){
+      const {error}=await sb.rpc('eliminar_compra',{p_compra_id:Number(c._remoteId)});
+      if(error)throw error;
+    }
+    // Retirar del stock lo que había ingresado esta compra, sin permitir negativos.
+    for(const x of (c.items||[])){
+      const a=byCode.get(norm(x.codigo)) || byBar.get(String(x.barra||'')) || ARTICULOS.find(z=>norm(z.descripcion)===norm(x.descripcion));
+      if(!a)continue;
+      const anterior=getStockActual(a), cant=Number(x.cantidad||0), mov=-Math.min(cant,anterior), nuevo=anterior+mov;
+      setStockActual(a,nuevo);
+      _registrarMovStock(a,'ANULACION COMPRA',anterior,mov,nuevo,`Eliminación ${c.numeroCompra}`);
+      if(mov!==0)await cloudApplyStockDelta(a,mov);
+    }
+    compras.splice(idx,1);
+    _saveCompras(compras);
+    scheduleCloudSync();
+    renderCompras(); renderStock(); actualizarResumenStock();
+    alert(`Compra ${c.numeroCompra} eliminada correctamente.`);
+  }catch(e){console.error(e);alert('No se pudo eliminar la compra.\n\n'+(e.message||e));}
+}
+
 function renderCompras(){
   const compras=getCompras().slice().reverse();
   const q=norm((document.getElementById('filtroCompraProveedor')||{}).value||'');
@@ -1437,7 +1504,10 @@ function renderCompras(){
       <td>${esc(c.tipo)} ${esc(c.sucursal||'')}-${esc(c.numeroComprobante||'')}</td>
       <td>${esc(c.proveedor)}</td><td class="num">${unidades.toLocaleString('es-AR')}</td>
       <td class="num"><b>${dinero(c.total)}</b></td>
-      <td><button class="btn" style="padding:7px 10px;border:1px solid var(--borde);background:white" onclick="toggleDetalleCompra('${c.numeroCompra}')">Ver</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn" style="padding:7px 10px;border:1px solid var(--borde);background:white" onclick="toggleDetalleCompra('${c.numeroCompra}')">Ver</button>
+        <button class="btn btn-danger" style="padding:7px 10px;margin-left:5px" onclick="eliminarCompra('${c.numeroCompra}')">Eliminar</button>
+      </td>
     </tr>
     <tr id="detcomp_${c.numeroCompra}" style="display:none;background:#f8fafc"><td colspan="7">
       <table style="margin:0"><thead><tr><th>Código</th><th>Artículo</th><th class="num">Cant.</th><th class="num">Costo s/IVA</th><th class="num">% Gan.</th><th class="num">Precio venta</th><th class="num">Subtotal</th></tr></thead><tbody>${det}</tbody></table>
@@ -1683,7 +1753,7 @@ function actualizarResumenStock(){
 
 
 // =====================================================
-// SINCRONIZACION SUPABASE - MULTI DISPOSITIVO
+// SINCRONIZACION SUPABASE - MULTI DISPOSITIVO v3
 // Mantiene localStorage como cache local para conservar compatibilidad
 // con todas las funciones existentes, y sincroniza la base central.
 // =====================================================
@@ -1760,7 +1830,7 @@ async function syncVentas(){
   const ventas=getVentas(); const artMap=await remoteArticleMap(); let changed=false;
   for(const v of ventas){
     if(v._remoteId)continue;
-    const {data,error}=await sb.from('ventas').insert({fecha:v.fechaHora||isoFromDateTime(v.fecha,v.hora),total:Number(v.total||0),medio_pago:v.medioPago||'Efectivo',estado:'FINALIZADA'}).select('id').single();
+    const {data,error}=await sb.from('ventas').insert({fecha:v.fechaHora||isoFromDateTime(v.fecha,v.hora),total:Number(v.total||0),medio_pago:v.medioPago||'Efectivo',estado:v.estado||'FINALIZADA'}).select('id').single();
     if(error)throw error;
     v._remoteId=data.id; changed=true;
     const det=(v.items||[]).map(x=>({venta_id:data.id,articulo_id:artMap.get(String(x.codigo||''))||null,codigo:x.codigo||null,descripcion:x.descripcion||x.nombre||'',cantidad:Number(x.cantidad||0),precio_unitario:Number(x.precio||0),subtotal:Number(x.subtotal??(Number(x.cantidad||0)*Number(x.precio||0)))}));
@@ -1904,7 +1974,7 @@ async function actualizarDesdeNube(mostrar=false){
     const sm={},cost={},price={}; ARTICULOS.forEach(a=>{const k=String(a.codigo||a.barra||a.descripcion);sm[k]=Number(a.stock||0);cost[k]=Number(a.costo||0);price[k]={precio:Number(a.precio||0),ganancia:Number(a.ganancia||0)}});
     localStorage.setItem(STOCK_KEY,JSON.stringify(sm));localStorage.setItem(COST_KEY,JSON.stringify(cost));localStorage.setItem(PRICE_KEY,JSON.stringify(price));
     const vdBy=new Map();vd.forEach(x=>{if(!vdBy.has(x.venta_id))vdBy.set(x.venta_id,[]);vdBy.get(x.venta_id).push(x)});
-    const ventasLocal=ventas.map(v=>{const d=new Date(v.fecha);return{numero:'V'+String(v.id).padStart(6,'0'),fecha:fechaLocalISO(d),hora:d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),fechaHora:d.toISOString(),medioPago:v.medio_pago,cajero:'Usuario',total:Number(v.total||0),_remoteId:v.id,items:(vdBy.get(v.id)||[]).map(x=>({codigo:x.codigo||'',barra:'',descripcion:x.descripcion,cantidad:Number(x.cantidad||0),precio:Number(x.precio_unitario||0),subtotal:Number(x.subtotal||0)}))}});localStorage.setItem(SALES_KEY,JSON.stringify(ventasLocal));
+    const ventasLocal=ventas.map(v=>{const d=new Date(v.fecha);return{numero:'V'+String(v.id).padStart(6,'0'),fecha:fechaLocalISO(d),hora:d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),fechaHora:d.toISOString(),medioPago:v.medio_pago,cajero:'Usuario',total:Number(v.total||0),estado:v.estado||'FINALIZADA',motivoAnulacion:v.motivo_anulacion||'',fechaAnulacion:v.anulada_en||null,_remoteId:v.id,items:(vdBy.get(v.id)||[]).map(x=>({codigo:x.codigo||'',barra:'',descripcion:x.descripcion,cantidad:Number(x.cantidad||0),precio:Number(x.precio_unitario||0),subtotal:Number(x.subtotal||0)}))}});localStorage.setItem(SALES_KEY,JSON.stringify(ventasLocal));
     const cdBy=new Map();cd.forEach(x=>{if(!cdBy.has(x.compra_id))cdBy.set(x.compra_id,[]);cdBy.get(x.compra_id).push(x)});
     const comprasLocal=compras.map(c=>{const d=new Date(c.fecha),parts=String(c.comprobante||'').split(' ');return{numeroCompra:'C'+String(c.id).padStart(6,'0'),fecha:fechaLocalISO(d),tipo:parts[0]||'FACTURA',sucursal:'',numeroComprobante:String(c.comprobante||''),proveedor:c.proveedor_id?provById.get(String(c.proveedor_id))||'':'',actualizarCosto:true,total:Number(c.total||0),_remoteId:c.id,items:(cdBy.get(c.id)||[]).map(x=>({codigo:x.codigo||'',barra:'',descripcion:x.descripcion,cantidad:Number(x.cantidad||0),costo:Number(x.costo_unitario||0),iva:21,ganancia:0,nuevoPrecio:0,subtotal:Number(x.subtotal||0)}))}});localStorage.setItem(PURCHASE_KEY,JSON.stringify(comprasLocal));
     localStorage.setItem(STOCK_MOV_KEY,JSON.stringify(movs.map(x=>{const d=new Date(x.fecha);return{fecha:fechaLocalISO(d),hora:d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),tipo:x.tipo,codigo:x.codigo||'',descripcion:x.descripcion||'',anterior:Number(x.stock_anterior||0),movimiento:Number(x.cantidad||0),nuevo:Number(x.stock_nuevo||0),detalle:x.observaciones||x.referencia||'',_remoteId:x.id}})));
