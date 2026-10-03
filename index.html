@@ -1466,27 +1466,47 @@ async function eliminarCompra(numero){
   if(idx<0){alert('No se encontró la compra.');return}
   const c=compras[idx];
   const unidades=(c.items||[]).reduce((s,x)=>s+Number(x.cantidad||0),0);
-  if(!confirm(`Se eliminará la compra ${c.numeroCompra} por ${dinero(c.total)}.\n\nTambién se descontarán ${unidades} unidades del stock.\n\n¿Continuar?`))return;
+
+  // Si el stock actual de TODOS los artículos de la compra está en 0,
+  // interpretamos que hubo un reinicio/inventario y eliminamos la compra
+  // SIN tocar stock para evitar valores negativos.
+  const itemsConArticulo=(c.items||[]).map(x=>({
+    item:x,
+    art:byCode.get(norm(x.codigo)) || byBar.get(String(x.barra||'')) || ARTICULOS.find(z=>norm(z.descripcion)===norm(x.descripcion))
+  })).filter(o=>o.art);
+  const todosEnCero=itemsConArticulo.length>0 && itemsConArticulo.every(o=>Number(getStockActual(o.art)||0)===0);
+
+  const mensaje=todosEnCero
+    ? `Se eliminará la compra ${c.numeroCompra} por ${dinero(c.total)}.\n\nEl stock actual de los artículos está en 0, por lo que NO se modificará el stock.\n\n¿Continuar?`
+    : `Se eliminará la compra ${c.numeroCompra} por ${dinero(c.total)}.\n\nTambién se intentarán descontar hasta ${unidades} unidades del stock, sin permitir valores negativos.\n\n¿Continuar?`;
+  if(!confirm(mensaje))return;
+
   try{
     // Elimina primero la compra remota. La función SQL borra detalle + cabecera.
     if(sb && c._remoteId){
       const {error}=await sb.rpc('eliminar_compra',{p_compra_id:Number(c._remoteId)});
       if(error)throw error;
     }
-    // Retirar del stock lo que había ingresado esta compra, sin permitir negativos.
-    for(const x of (c.items||[])){
-      const a=byCode.get(norm(x.codigo)) || byBar.get(String(x.barra||'')) || ARTICULOS.find(z=>norm(z.descripcion)===norm(x.descripcion));
-      if(!a)continue;
-      const anterior=getStockActual(a), cant=Number(x.cantidad||0), mov=-Math.min(cant,anterior), nuevo=anterior+mov;
-      setStockActual(a,nuevo);
-      _registrarMovStock(a,'ANULACION COMPRA',anterior,mov,nuevo,`Eliminación ${c.numeroCompra}`);
-      if(mov!==0)await cloudApplyStockDelta(a,mov);
+
+    // Solo revierte stock cuando NO estamos ante un inventario reiniciado en cero.
+    if(!todosEnCero){
+      for(const o of itemsConArticulo){
+        const x=o.item, a=o.art;
+        const anterior=Number(getStockActual(a)||0), cant=Number(x.cantidad||0);
+        const mov=-Math.min(cant,anterior), nuevo=anterior+mov;
+        setStockActual(a,nuevo);
+        _registrarMovStock(a,'ANULACION COMPRA',anterior,mov,nuevo,`Eliminación ${c.numeroCompra}`);
+        if(mov!==0)await cloudApplyStockDelta(a,mov);
+      }
     }
+
     compras.splice(idx,1);
     _saveCompras(compras);
     scheduleCloudSync();
     renderCompras(); renderStock(); actualizarResumenStock();
-    alert(`Compra ${c.numeroCompra} eliminada correctamente.`);
+    alert(todosEnCero
+      ? `Compra ${c.numeroCompra} eliminada correctamente.\n\nEl stock se mantuvo en 0.`
+      : `Compra ${c.numeroCompra} eliminada correctamente.`);
   }catch(e){console.error(e);alert('No se pudo eliminar la compra.\n\n'+(e.message||e));}
 }
 
