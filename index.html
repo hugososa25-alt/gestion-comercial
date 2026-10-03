@@ -27,6 +27,8 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
 .table-wrap{max-height:70vh;overflow:auto;border:1px solid var(--borde);border-radius:6px}.small{font-size:12px;color:#6c7885}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.kpi{background:white;border:1px solid var(--borde);border-radius:8px;padding:18px}.kpi .n{font-size:28px;font-weight:700;margin-top:6px}
 .notice{background:#fff8e5;border:1px solid #f2d690;padding:12px;border-radius:7px;margin-bottom:12px}
+
+.mp-qr-box{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}.mp-qr-box canvas{max-width:320px;width:100%;height:auto;border:10px solid #fff;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.12)}.mp-qr-amount{font-size:34px;font-weight:800}.mp-qr-status{font-weight:700;color:#345}.mp-qr-note{font-size:13px;color:#667}.mp-spinner{display:inline-block;width:14px;height:14px;border:2px solid #ccd;border-top-color:#1687f8;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}@keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:900px){aside{width:72px}.brand{font-size:0;padding:18px 10px;text-align:center}.brand:before{content:"GC";font-size:20px}.brand small{display:none}nav a{font-size:0;padding:18px 10px;text-align:center}nav a:before{content:"•";font-size:24px}main{margin-left:72px;width:calc(100% - 72px)}.busqueda{grid-template-columns:1fr 90px}.suggestions{right:0}.bottom,.kpis{grid-template-columns:1fr}.venta-head h1{font-size:24px}.total-box .total{font-size:34px}}
 
 .sales-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
@@ -650,7 +652,23 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
 
 </div>
 
+<div id="modalMercadoPagoQR" class="modal-backdrop" style="z-index:9999">
+  <div class="modal" style="max-width:430px">
+    <div class="mp-qr-box">
+      <h2 style="margin:0">Mercado Pago</h2>
+      <div class="mp-qr-amount" id="mpQrImporte">$ 0,00</div>
+      <canvas id="mpQrCanvas" width="320" height="320"></canvas>
+      <div class="mp-qr-status" id="mpQrEstado"><span class="mp-spinner"></span>Esperando pago...</div>
+      <div class="mp-qr-note" id="mpQrDetalle">Escaneá el QR desde Mercado Pago. La venta se registrará cuando el pago quede acreditado.</div>
+      <div class="modal-actions" style="width:100%;justify-content:center">
+        <button id="btnCancelarMpQr" class="btn btn-danger" onclick="cancelarEsperaMercadoPago()">Cancelar cobro</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <script>
 const SUPABASE_URL='https://ggwxcajkespwnwyljxfa.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_4sqOG7oAdUPwM4Aoxyzfvg_S_AAekWx';
@@ -1002,10 +1020,138 @@ function fechaLocalISO(d=new Date()){
   const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
 }
-function finalizarVenta(){
+let mpQrPollTimer=null;
+let mpQrOrderId=null;
+let mpQrCancelado=false;
+
+async function invocarMercadoPagoQR(payload){
+  if(!sb)throw new Error('Supabase no está disponible.');
+  const {data,error}=await sb.functions.invoke('mercadopago-qr',{body:payload});
+  if(error)throw error;
+  if(data&&data.error)throw new Error(typeof data.error==='string'?data.error:JSON.stringify(data.error));
+  return data;
+}
+
+function abrirModalMercadoPago(total,qrData){
+  const modal=document.getElementById('modalMercadoPagoQR');
+  document.getElementById('mpQrImporte').textContent=dinero(total);
+  document.getElementById('mpQrEstado').innerHTML='<span class="mp-spinner"></span>Esperando pago...';
+  document.getElementById('mpQrDetalle').textContent='Escaneá el QR desde Mercado Pago. La venta se registrará cuando el pago quede acreditado.';
+  const btn=document.getElementById('btnCancelarMpQr'); if(btn)btn.disabled=false;
+  modal.style.display='flex';
+  const canvas=document.getElementById('mpQrCanvas');
+  if(window.QRCode&&QRCode.toCanvas){
+    QRCode.toCanvas(canvas,qrData,{width:320,margin:1,errorCorrectionLevel:'M'},err=>{
+      if(err){console.error(err);document.getElementById('mpQrDetalle').textContent='No se pudo dibujar el QR: '+err.message;}
+    });
+  }else{
+    throw new Error('No se pudo cargar la librería para mostrar el QR.');
+  }
+}
+
+function cerrarModalMercadoPago(){
+  const m=document.getElementById('modalMercadoPagoQR'); if(m)m.style.display='none';
+}
+
+function cancelarEsperaMercadoPago(){
+  mpQrCancelado=true;
+  if(mpQrPollTimer){clearInterval(mpQrPollTimer);mpQrPollTimer=null;}
+  mpQrOrderId=null;
+  cerrarModalMercadoPago();
+  prod.focus();
+}
+
+async function esperarPagoMercadoPago(orderId,total,ventaNumero){
+  mpQrOrderId=orderId;
+  mpQrCancelado=false;
+  let consultando=false;
+  const revisar=async()=>{
+    if(mpQrCancelado||consultando)return;
+    consultando=true;
+    try{
+      const data=await invocarMercadoPagoQR({action:'get_order',order_id:orderId});
+      const estado=String(data?.status||'').toLowerCase();
+      const detalle=String(data?.status_detail||'').toLowerCase();
+      if(estado==='processed'){
+        clearInterval(mpQrPollTimer);mpQrPollTimer=null;
+        document.getElementById('mpQrEstado').innerHTML='✅ Pago acreditado';
+        document.getElementById('mpQrDetalle').textContent='Pago confirmado por Mercado Pago. Registrando venta...';
+        const btn=document.getElementById('btnCancelarMpQr'); if(btn)btn.disabled=true;
+        await registrarVentaConfirmada(total,{mpOrderId:orderId,mpStatus:estado,mpStatusDetail:detalle,numeroForzado:ventaNumero});
+        setTimeout(()=>cerrarModalMercadoPago(),700);
+        return;
+      }
+      if(['expired','canceled','refunded'].includes(estado)){
+        clearInterval(mpQrPollTimer);mpQrPollTimer=null;
+        document.getElementById('mpQrEstado').textContent=estado==='expired'?'⌛ QR vencido':'❌ Cobro cancelado';
+        document.getElementById('mpQrDetalle').textContent='La venta no fue registrada ni se descontó stock.';
+        return;
+      }
+      document.getElementById('mpQrEstado').innerHTML='<span class="mp-spinner"></span>Esperando pago...';
+    }catch(e){
+      console.error('Consulta Mercado Pago',e);
+      document.getElementById('mpQrDetalle').textContent='Seguimos esperando. Última consulta: '+(e.message||e);
+    }finally{consultando=false;}
+  };
+  await revisar();
+  if(!mpQrPollTimer&&!mpQrCancelado){mpQrPollTimer=setInterval(revisar,2500);}
+}
+
+async function registrarVentaConfirmada(total,extra={}){
+  // Volvemos a validar stock justo antes de registrar.
+  for(const x of items){
+    const a=byCode.get(norm(x.codigo)) || byBar.get(String(x.barra||'')) || ARTICULOS.find(z=>norm(z.descripcion)===norm(x.nombre));
+    if(a){
+      const actual=getStockActual(a);
+      if(actual < Number(x.cantidad||0)){
+        throw new Error(`Stock insuficiente para ${x.nombre}. Stock actual: ${actual}`);
+      }
+    }
+  }
+
+  const ventas=getVentas();
+  const ahora=new Date();
+  const venta={
+    numero:extra.numeroForzado||nextSaleNumber(ventas),
+    fecha:fechaLocalISO(ahora),
+    hora:ahora.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+    fechaHora:ahora.toISOString(),
+    medioPago,
+    cajero:'Usuario',
+    total,
+    estado:'FINALIZADA',
+    mercadoPagoOrderId:extra.mpOrderId||null,
+    mercadoPagoStatus:extra.mpStatus||null,
+    items:items.map(x=>({
+      codigo:x.codigo,barra:x.barra,descripcion:x.nombre,cantidad:x.cantidad,precio:x.precio,subtotal:x.cantidad*x.precio
+    }))
+  };
+
+  // Descontar stock y registrar movimiento.
+  for(const x of items){
+    const a=byCode.get(norm(x.codigo)) || byBar.get(String(x.barra||'')) || ARTICULOS.find(z=>norm(z.descripcion)===norm(x.nombre));
+    if(a){
+      const anterior=getStockActual(a);
+      const nuevo=anterior-Number(x.cantidad||0);
+      setStockActual(a,nuevo);
+      registrarMovStock(a,'VENTA',anterior,-Number(x.cantidad||0),nuevo,`Venta ${venta.numero}`);
+    }
+  }
+
+  ventas.push(venta);
+  saveVentas(ventas);
+  items=[];
+  renderVenta();
+  actualizarResumenVentas();
+  actualizarResumenStock();
+  if(medioPago!=='Mercado Pago')alert(`Venta registrada correctamente\n\nN° ${venta.numero}\nTotal: ${dinero(total)}\nPago: ${medioPago}`);
+  prod.focus();
+  return venta;
+}
+
+async function finalizarVenta(){
   if(!items.length){alert('No hay productos cargados.');return}
 
-  // Validar stock antes de registrar
   for(const x of items){
     const a=byCode.get(norm(x.codigo)) || byBar.get(String(x.barra||'')) || ARTICULOS.find(z=>norm(z.descripcion)===norm(x.nombre));
     if(a){
@@ -1018,45 +1164,32 @@ function finalizarVenta(){
   }
 
   const total=items.reduce((s,x)=>s+x.cantidad*x.precio,0);
-  const ventas=getVentas();
-  const ahora=new Date();
-  const venta={
-    numero:nextSaleNumber(ventas),
-    fecha:fechaLocalISO(ahora),
-    hora:ahora.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
-    fechaHora:ahora.toISOString(),
-    medioPago,
-    cajero:'Usuario',
-    total,
-    items:items.map(x=>({
-      codigo:x.codigo,
-      barra:x.barra,
-      descripcion:x.nombre,
-      cantidad:x.cantidad,
-      precio:x.precio,
-      subtotal:x.cantidad*x.precio
-    }))
-  };
 
-  // Descontar stock y registrar movimiento
-  items.forEach(x=>{
-    const a=byCode.get(norm(x.codigo)) || byBar.get(String(x.barra||'')) || ARTICULOS.find(z=>norm(z.descripcion)===norm(x.nombre));
-    if(a){
-      const anterior=getStockActual(a);
-      const nuevo=anterior-Number(x.cantidad||0);
-      setStockActual(a,nuevo);
-      registrarMovStock(a,'VENTA',anterior,-Number(x.cantidad||0),nuevo,`Venta ${venta.numero}`);
-    }
-  });
+  if(medioPago!=='Mercado Pago'){
+    try{await registrarVentaConfirmada(total);}
+    catch(e){console.error(e);alert('No se pudo registrar la venta.\n\n'+(e.message||e));}
+    return;
+  }
 
-  ventas.push(venta);
-  saveVentas(ventas);
-  items=[];
-  renderVenta();
-  actualizarResumenVentas();
-  actualizarResumenStock();
-  alert(`Venta registrada correctamente\n\nN° ${venta.numero}\nTotal: ${dinero(total)}\nPago: ${medioPago}`);
-  prod.focus();
+  try{
+    const ventas=getVentas();
+    const numero=nextSaleNumber(ventas);
+    const order=await invocarMercadoPagoQR({
+      action:'create_order',
+      amount:Number(total.toFixed(2)),
+      external_reference:numero,
+      description:`Venta ${numero} Gestion Comercial`
+    });
+    const orderId=order?.id;
+    const qrData=order?.type_response?.qr_data;
+    if(!orderId||!qrData)throw new Error('Mercado Pago no devolvió el QR de la orden.');
+    abrirModalMercadoPago(total,qrData);
+    await esperarPagoMercadoPago(orderId,total,numero);
+  }catch(e){
+    console.error('Mercado Pago QR',e);
+    cerrarModalMercadoPago();
+    alert('No se pudo iniciar el cobro con Mercado Pago.\n\n'+(e.message||e));
+  }
 }
 function limpiarFiltrosVentas(){
   document.getElementById('filtroFechaVenta').value='';
