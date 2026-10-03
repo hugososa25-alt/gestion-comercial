@@ -1077,7 +1077,7 @@ async function esperarPagoMercadoPago(orderId,total,ventaNumero){
         document.getElementById('mpQrEstado').innerHTML='✅ Pago acreditado';
         document.getElementById('mpQrDetalle').textContent='Pago confirmado por Mercado Pago. Registrando venta...';
         const btn=document.getElementById('btnCancelarMpQr'); if(btn)btn.disabled=true;
-        await registrarVentaConfirmada(total,{mpOrderId:orderId,mpStatus:estado,mpStatusDetail:detalle,numeroForzado:ventaNumero});
+        await registrarVentaConfirmada(total,{mpConfirmed:true,mpOrderId:orderId,mpStatus:estado,mpStatusDetail:detalle,numeroForzado:ventaNumero});
         setTimeout(()=>cerrarModalMercadoPago(),700);
         return;
       }
@@ -1098,6 +1098,13 @@ async function esperarPagoMercadoPago(orderId,total,ventaNumero){
 }
 
 async function registrarVentaConfirmada(total,extra={}){
+  // Seguridad: una venta marcada como Mercado Pago JAMAS puede registrarse
+  // sin confirmacion previa devuelta por Mercado Pago.
+  const pagoActual=String((document.getElementById('medioPago')||{}).textContent||medioPago||'').trim();
+  if(pagoActual==='Mercado Pago' && extra.mpConfirmed!==true){
+    throw new Error('Mercado Pago aun no confirmo el cobro. La venta no fue registrada.');
+  }
+
   // Volvemos a validar stock justo antes de registrar.
   for(const x of items){
     const a=byCode.get(norm(x.codigo)) || byBar.get(String(x.barra||'')) || ARTICULOS.find(z=>norm(z.descripcion)===norm(x.nombre));
@@ -1116,18 +1123,18 @@ async function registrarVentaConfirmada(total,extra={}){
     fecha:fechaLocalISO(ahora),
     hora:ahora.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
     fechaHora:ahora.toISOString(),
-    medioPago,
+    medioPago:pagoActual,
     cajero:'Usuario',
     total,
     estado:'FINALIZADA',
     mercadoPagoOrderId:extra.mpOrderId||null,
     mercadoPagoStatus:extra.mpStatus||null,
-    items:items.map(x=>({
-      codigo:x.codigo,barra:x.barra,descripcion:x.nombre,cantidad:x.cantidad,precio:x.precio,subtotal:x.cantidad*x.precio
-    }))
+    items:items.map(x=>(
+      {codigo:x.codigo,barra:x.barra,descripcion:x.nombre,cantidad:x.cantidad,precio:x.precio,subtotal:x.cantidad*x.precio}
+    ))
   };
 
-  // Descontar stock y registrar movimiento.
+  // Descontar stock y registrar movimiento SOLO despues de la validacion anterior.
   for(const x of items){
     const a=byCode.get(norm(x.codigo)) || byBar.get(String(x.barra||'')) || ARTICULOS.find(z=>norm(z.descripcion)===norm(x.nombre));
     if(a){
@@ -1144,7 +1151,13 @@ async function registrarVentaConfirmada(total,extra={}){
   renderVenta();
   actualizarResumenVentas();
   actualizarResumenStock();
-  if(medioPago!=='Mercado Pago')alert(`Venta registrada correctamente\n\nN° ${venta.numero}\nTotal: ${dinero(total)}\nPago: ${medioPago}`);
+
+  if(pagoActual==='Mercado Pago'){
+    document.getElementById('mpQrEstado').innerHTML='✅ Pago acreditado y venta registrada';
+    document.getElementById('mpQrDetalle').textContent=`Venta ${venta.numero} registrada correctamente por ${dinero(total)}.`;
+  }else{
+    alert(`Venta registrada correctamente\n\nN° ${venta.numero}\nTotal: ${dinero(total)}\nPago: ${pagoActual}`);
+  }
   prod.focus();
   return venta;
 }
@@ -1164,13 +1177,18 @@ async function finalizarVenta(){
   }
 
   const total=items.reduce((s,x)=>s+x.cantidad*x.precio,0);
+  // Tomamos el medio visible de la pantalla para evitar cualquier desincronizacion
+  // entre la variable JS y el boton seleccionado.
+  const pagoSeleccionado=String((document.getElementById('medioPago')||{}).textContent||medioPago||'').trim();
+  medioPago=pagoSeleccionado;
 
-  if(medioPago!=='Mercado Pago'){
+  if(pagoSeleccionado!=='Mercado Pago'){
     try{await registrarVentaConfirmada(total);}
     catch(e){console.error(e);alert('No se pudo registrar la venta.\n\n'+(e.message||e));}
     return;
   }
 
+  // Mercado Pago: BLOQUEO DURO. No se registra ni descuenta stock aqui.
   try{
     const ventas=getVentas();
     const numero=nextSaleNumber(ventas);
@@ -1182,13 +1200,13 @@ async function finalizarVenta(){
     });
     const orderId=order?.id;
     const qrData=order?.type_response?.qr_data;
-    if(!orderId||!qrData)throw new Error('Mercado Pago no devolvió el QR de la orden.');
+    if(!orderId||!qrData)throw new Error('Mercado Pago no devolvio el QR de la orden.');
     abrirModalMercadoPago(total,qrData);
     await esperarPagoMercadoPago(orderId,total,numero);
   }catch(e){
     console.error('Mercado Pago QR',e);
     cerrarModalMercadoPago();
-    alert('No se pudo iniciar el cobro con Mercado Pago.\n\n'+(e.message||e));
+    alert('No se pudo iniciar el cobro con Mercado Pago.\n\nLa venta NO fue registrada y el stock NO fue descontado.\n\n'+(e.message||e));
   }
 }
 function limpiarFiltrosVentas(){
