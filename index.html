@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sistema de Gestión Comercial</title>
+<title>Sistema de Gestión Comercial v9</title>
 <style>
 :root{--azul:#2f5e9b;--azul2:#254c80;--fondo:#eef2f7;--borde:#d9e0e8;--texto:#243447;--oscuro:#393236;--verde:#169873;--rojo:#d9534f;--naranja:#f0ad4e}
 *{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--texto)}
@@ -199,7 +199,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
    </div>
    <div class="notice" style="margin-top:14px">Podés buscar, editar o dar de alta artículos. Las correcciones se guardan en Supabase y se comparten con las demás PC y celulares.</div>
    <div class="article-toolbar"><input id="filtroArticulos" placeholder="Buscar por código, código de barras o descripción..."><span class="count-badge" id="articleCount"></span></div>
-   <div class="table-wrap"><table><thead><tr><th>Código</th><th>Código de barras</th><th>Descripción</th><th>Rubro</th><th class="num">Costo s/IVA</th><th class="num">Precio</th><th class="num">% Gan.</th><th>Acción</th></tr></thead><tbody id="tablaArticulos"></tbody></table></div>
+   <div class="table-wrap"><table><thead><tr><th>Código</th><th>Código de barras</th><th>Descripción</th><th>Rubro</th><th class="num">Costo con IVA</th><th class="num">Precio</th><th class="num">% Gan.</th><th>Acción</th></tr></thead><tbody id="tablaArticulos"></tbody></table></div>
   </div>
 
   <div id="articuloFormulario" style="display:none">
@@ -260,14 +260,11 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
       <h3>Precios y stock</h3>
       <div class="article-form">
         <div>
-          <label>Costo sin IVA</label>
+          <label>Costo con IVA incluido</label>
           <input id="naCosto" type="number" min="0" step="0.01" placeholder="0,00">
-          <div class="helper">Siempre se guarda el costo neto sin IVA.</div>
+          <div class="helper">Ingresá el costo final tal como viene en la factura, con IVA incluido.</div>
         </div>
-        <div>
-          <label>IVA (%)</label>
-          <input id="naIva" type="number" min="0" step="0.01" value="21">
-        </div>
+        <input id="naIva" type="hidden" value="0">
         <div>
           <label>% de ganancia</label>
           <input id="naGanancia" type="number" min="0" step="0.01" placeholder="Ej: 30">
@@ -276,7 +273,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
         <div>
           <label>Precio de venta *</label>
           <input id="naPrecio" type="number" min="0" step="0.01" placeholder="0,00">
-          <div class="helper">Se recalcula desde el costo + IVA + % de ganancia.</div>
+          <div class="helper">Se recalcula desde el costo con IVA incluido + % de ganancia.</div>
         </div>
         <div>
           <label>Stock inicial</label>
@@ -442,13 +439,10 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
           <input id="pcCantidad" type="number" min="0.01" step="0.01" value="1">
         </div>
         <div>
-          <label>Costo unitario s/IVA</label>
+          <label>Costo unitario con IVA</label>
           <input id="pcCosto" type="number" min="0" step="0.01" placeholder="0,00">
         </div>
-        <div>
-          <label>IVA %</label>
-          <input id="pcIva" type="number" min="0" step="0.01" value="21">
-        </div>
+        <input id="pcIva" type="hidden" value="0">
         <div>
           <label>% ganancia</label>
           <input id="pcGanancia" type="number" min="0" step="0.01" placeholder="%">
@@ -461,7 +455,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
       <div class="table-wrap purchase-items-wrap" style="max-height:45vh">
         <table>
           <thead>
-            <tr><th>Código</th><th>Artículo</th><th class="num">Cant.</th><th class="num">Costo s/IVA</th><th class="num">IVA</th><th class="num">% Gan.</th><th class="num">Nuevo precio</th><th class="num">Subtotal</th><th>Acción</th></tr>
+            <tr><th>Código</th><th>Artículo</th><th class="num">Cant.</th><th class="num">Costo con IVA</th><th class="num">% Gan.</th><th class="num">Nuevo precio</th><th class="num">Subtotal</th><th>Acción</th></tr>
           </thead>
           <tbody id="tablaItemsCompra"></tbody>
         </table>
@@ -495,7 +489,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
     <div class="price-head">
       <div>
         <h2 style="margin:0">Precios</h2>
-        <div class="small" style="margin-top:5px">Actualización de precios según costo sin IVA, IVA y porcentaje de ganancia.</div>
+        <div class="small" style="margin-top:5px">Actualización de precios según costo con IVA incluido y porcentaje de ganancia.</div>
       </div>
     </div>
 
@@ -541,7 +535,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
       </div>
 
       <div class="calc-note" style="margin-bottom:12px">
-        Fórmula: <b>costo sin IVA × (1 + IVA) × (1 + % ganancia)</b>. Podés cambiar el porcentaje por artículo y luego aplicar el precio sugerido.
+        Fórmula: <b>costo con IVA × (1 + % ganancia)</b>. Podés cambiar el porcentaje por artículo y luego aplicar el precio sugerido.
       </div>
 
       <div class="table-wrap" style="max-height:62vh">
@@ -550,7 +544,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
             <tr>
               <th style="width:36px"><input id="precioCheckTodos" type="checkbox" onclick="toggleTodosPrecios(this.checked)"></th>
               <th>Código</th><th>Artículo</th><th>Proveedor</th>
-              <th class="num">Costo s/IVA</th><th class="num">IVA</th>
+              <th class="num">Costo con IVA</th>
               <th class="num">% Gan.</th><th class="num">Precio actual</th>
               <th class="num">Precio sugerido</th><th class="num">Diferencia</th>
             </tr>
@@ -1240,25 +1234,21 @@ document.getElementById('filtroTipoMovStock').addEventListener('change',renderMo
 
 
 
-function calcularPrecioVentaDesdeCosto(costoSinIva,iva,ganancia){
-  const costo=Number(costoSinIva||0);
-  const alicuota=Number(iva||0);
+function calcularPrecioVentaDesdeCosto(costoConIva,iva,ganancia){
+  const costo=Number(costoConIva||0);
   const margen=Number(ganancia||0);
   if(costo<=0) return 0;
-  const costoConIva=costo*(1+alicuota/100);
-  return costoConIva*(1+margen/100);
+  return costo*(1+margen/100);
 }
-function calcularGananciaDesdePrecio(costoSinIva,iva,precioVenta){
-  const costo=Number(costoSinIva||0);
-  const alicuota=Number(iva||0);
+function calcularGananciaDesdePrecio(costoConIva,iva,precioVenta){
+  const costo=Number(costoConIva||0);
   const precio=Number(precioVenta||0);
   if(costo<=0||precio<=0) return null;
-  const costoConIva=costo*(1+alicuota/100);
-  return ((precio/costoConIva)-1)*100;
+  return ((precio/costo)-1)*100;
 }
 function recalcularNuevoArticuloPrecio(){
   const costo=Number(document.getElementById('naCosto').value||0);
-  const iva=Number(document.getElementById('naIva').value||0);
+  const iva=0;
   const gan=Number(document.getElementById('naGanancia').value||0);
   if(costo>0 && Number.isFinite(gan)){
     document.getElementById('naPrecio').value=calcularPrecioVentaDesdeCosto(costo,iva,gan).toFixed(2);
@@ -1305,14 +1295,14 @@ function prepararFormularioArticulo(modo,a=null){
     document.getElementById('naRubro').value=a.rubro||'';
     document.getElementById('naSubrubro').value=a.subrubro||'';
     document.getElementById('naCosto').value=Number(a.costo||0);
-    document.getElementById('naIva').value=Number(a.iva||0);
+    document.getElementById('naIva').value=0;
     document.getElementById('naGanancia').value=Number(a.ganancia||0);
     document.getElementById('naPrecio').value=Number(a.precio||0);
     stock.value=getStockActual(a);
   }else{
     ['naDescripcion','naMarca','naProveedor','naBarra','naRubro','naSubrubro','naCosto','naPrecio','naGanancia'].forEach(id=>document.getElementById(id).value='');
     cod.value=siguienteCodigoInterno();
-    document.getElementById('naIva').value='21';
+    document.getElementById('naIva').value='0';
     stock.value='0';
   }
   setTimeout(()=>document.getElementById('naDescripcion').focus(),50);
@@ -1344,7 +1334,7 @@ async function guardarArticuloEditadoEnNube(originalCodigo,a){
     }
     const payload={
       codigo:String(a.codigo),codigo_barras:String(a.barra||'').trim()||null,descripcion:String(a.descripcion||''),
-      rubro:String(a.rubro||'').trim()||null,proveedor_id:proveedorId,costo:Number(a.costo||0),iva:Number(a.iva||0),
+      rubro:String(a.rubro||'').trim()||null,proveedor_id:proveedorId,costo:Number(a.costo||0),iva:0,
       ganancia:Number(a.ganancia||0),precio:Number(a.precio||0),activo:true,actualizado_en:new Date().toISOString()
     };
     const {error}=await sb.from('articulos').update(payload).eq('codigo',String(originalCodigo));
@@ -1365,7 +1355,7 @@ async function guardarNuevoArticulo(){
   const precio=Number(document.getElementById('naPrecio').value||0);
   const gananciaManual=document.getElementById('naGanancia').value;
   const stock=Number(document.getElementById('naStock').value||0);
-  const iva=Number(document.getElementById('naIva').value||0);
+  const iva=0;
   const editando=!!articuloEditandoCodigoOriginal;
   const originalCodigo=articuloEditandoCodigoOriginal;
   const actual=editando?byCode.get(norm(originalCodigo)):null;
@@ -1433,6 +1423,41 @@ async function guardarNuevoArticulo(){
   alert(`Artículo creado correctamente\n\n[${a.codigo}] ${a.descripcion}`);
 }
 
+let compraItems=[];
+let compraArticuloSeleccionado=null;
+
+function abrirNuevaCompra(){
+  const listado=document.getElementById('comprasListado');
+  const form=document.getElementById('compraFormulario');
+  if(listado)listado.style.display='none';
+  if(form)form.style.display='block';
+  compraItems=[];
+  compraArticuloSeleccionado=null;
+  document.getElementById('pcTipo').value='FACTURA PREIMPRESO';
+  document.getElementById('pcFecha').value=fechaLocalISO(new Date());
+  document.getElementById('pcSucursal').value='';
+  document.getElementById('pcNumero').value='';
+  document.getElementById('pcProveedor').value='';
+  document.getElementById('pcActualizarCosto').value='si';
+  limpiarCargaItemCompra();
+  renderItemsCompra();
+  setTimeout(()=>document.getElementById('pcProveedor')?.focus(),50);
+}
+function cancelarNuevaCompra(){
+  const a=document.getElementById('compraFormulario'),b=document.getElementById('comprasListado');
+  if(a)a.style.display='none';
+  if(b)b.style.display='block';
+}
+function limpiarCargaItemCompra(){
+  const p=document.getElementById('pcProducto'); if(p)p.value='';
+  const q=document.getElementById('pcCantidad'); if(q)q.value='1';
+  const c=document.getElementById('pcCosto'); if(c)c.value='';
+  const i=document.getElementById('pcIva'); if(i)i.value='0';
+  const g=document.getElementById('pcGanancia'); if(g)g.value='';
+  compraArticuloSeleccionado=null;
+  const sug=document.getElementById('pcSuggestions'); if(sug)sug.style.display='none';
+}
+
 function buscarCompraArticulos(q){
   q=norm(q);
   if(!q)return[];
@@ -1459,7 +1484,7 @@ function seleccionarArticuloCompra(a){
   compraArticuloSeleccionado=a;
   document.getElementById('pcProducto').value=`${a.codigo ? a.codigo+' - ' : ''}${a.descripcion}`;
   document.getElementById('pcCosto').value=Number(a.costo||0).toFixed(2);
-  document.getElementById('pcIva').value=Number(a.iva||21);
+  document.getElementById('pcIva').value=0;
   document.getElementById('pcGanancia').value=a.ganancia==null?'':Number(a.ganancia).toFixed(2);
   document.getElementById('pcSuggestions').style.display='none';
   const q=document.getElementById('pcCantidad'); q.focus(); q.select();
@@ -1473,7 +1498,7 @@ function agregarItemCompra(){
   if(!a){alert('Seleccioná un artículo.');return}
   const cant=Number(document.getElementById('pcCantidad').value||0);
   const costo=Number(document.getElementById('pcCosto').value||0);
-  const iva=Number(document.getElementById('pcIva').value||0);
+  const iva=0;
   const gananciaTxt=document.getElementById('pcGanancia').value;
   const ganancia=gananciaTxt===''?(a.ganancia==null?0:Number(a.ganancia)):Number(gananciaTxt);
   if(cant<=0){alert('Ingresá una cantidad válida.');return}
@@ -1506,10 +1531,11 @@ function renderItemsCompra(){
   tb.innerHTML=compraItems.length?compraItems.map((x,i)=>`<tr>
     <td>${esc(x.codigo)}</td><td>${esc(x.descripcion)}</td>
     <td class="num">${Number(x.cantidad).toLocaleString('es-AR',{maximumFractionDigits:2})}</td>
-    <td class="num">${dinero(x.costo)}</td><td class="num">${Number(x.iva).toLocaleString('es-AR')}%</td>
-    <td class="num">${dinero(x.subtotal)}</td>
+    <td class="num">${dinero(x.costo)}</td>
+    <td class="num">${Number(x.ganancia||0).toLocaleString('es-AR',{maximumFractionDigits:2})}%</td>
+    <td class="num">${dinero(x.nuevoPrecio||0)}</td><td class="num">${dinero(x.subtotal)}</td>
     <td><button class="btn btn-danger" style="padding:7px 10px" onclick="eliminarItemCompra(${i})">Eliminar</button></td>
-  </tr>`).join(''):'<tr><td colspan="7" class="empty">Todavía no hay artículos en la compra</td></tr>';
+  </tr>`).join(''):'<tr><td colspan="8" class="empty">Todavía no hay artículos en la compra</td></tr>';
   const total=compraItems.reduce((s,x)=>s+Number(x.subtotal||0),0);
   document.getElementById('pcTotal').textContent=dinero(total);
 }
@@ -1520,7 +1546,7 @@ function nextPurchaseNumber(compras){
   },0);
   return 'C'+String(max+1).padStart(6,'0');
 }
-function guardarCompra(){
+async function guardarCompra(){
   const proveedor=document.getElementById('pcProveedor').value.trim();
   if(!proveedor){alert('Ingresá el proveedor.');return}
   if(!compraItems.length){alert('Agregá al menos un artículo.');return}
@@ -1561,7 +1587,24 @@ function guardarCompra(){
   renderArticulos();
   actualizarResumenStock();
   cancelarNuevaCompra();
-  alert(`Compra registrada correctamente\n\n${compra.numeroCompra}\nProveedor: ${proveedor}\nTotal: ${dinero(compra.total)}\n\nEl stock fue actualizado${actualizarCosto?' y también los costos.':'.'}`);
+  // Intentar persistir la compra inmediatamente en Supabase.
+  // Si falla, la compra queda guardada localmente y marcada para reintento; nunca desaparece silenciosamente.
+  let nubeOk=true;
+  if(sb && cloudEnabled()){
+    try{
+      cloudSetStatus('Guardando compra en la nube...');
+      await syncProveedoresArticulos(false);
+      await syncCompras();
+      await syncMovStock();
+      if(actualizarCosto)await syncHistorialPrecios();
+      cloudSetStatus('Conectado a Supabase · compra guardada');
+    }catch(e){
+      nubeOk=false;
+      console.error('Error guardando compra en Supabase',e);
+      cloudSetStatus('Compra guardada en esta PC · pendiente de sincronizar: '+(e.message||e),'warn');
+    }
+  }
+  alert(`Compra registrada correctamente\n\n${compra.numeroCompra}\nProveedor: ${proveedor}\nTotal: ${dinero(compra.total)}\n\nEl stock fue actualizado${actualizarCosto?' y también los costos.':'.'}${nubeOk?'\n\nGuardada también en la nube.':'\n\nATENCIÓN: quedó guardada en esta PC, pero está pendiente de sincronizar con la nube.'}`);
 }
 function toggleDetalleCompra(numero){
   const row=document.getElementById('detcomp_'+numero);
@@ -1637,7 +1680,7 @@ function renderCompras(){
       </td>
     </tr>
     <tr id="detcomp_${c.numeroCompra}" style="display:none;background:#f8fafc"><td colspan="7">
-      <table style="margin:0"><thead><tr><th>Código</th><th>Artículo</th><th class="num">Cant.</th><th class="num">Costo s/IVA</th><th class="num">% Gan.</th><th class="num">Precio venta</th><th class="num">Subtotal</th></tr></thead><tbody>${det}</tbody></table>
+      <table style="margin:0"><thead><tr><th>Código</th><th>Artículo</th><th class="num">Cant.</th><th class="num">Costo con IVA</th><th class="num">% Gan.</th><th class="num">Precio venta</th><th class="num">Subtotal</th></tr></thead><tbody>${det}</tbody></table>
     </td></tr>`;
   }).join(''):'<tr><td colspan="7" class="empty">No hay compras registradas</td></tr>';
 
@@ -1688,7 +1731,7 @@ function redondearPrecio(valor,multiplo){
   return Math.ceil(valor/multiplo)*multiplo;
 }
 function sugeridoArticulo(a,ganancia){
-  const base=calcularPrecioVentaDesdeCosto(Number(a.costo||0),Number(a.iva||0),Number(ganancia||0));
+  const base=calcularPrecioVentaDesdeCosto(Number(a.costo||0),0,Number(ganancia||0));
   return redondearPrecio(base,Number((document.getElementById('precioRedondeo')||{}).value||0));
 }
 function prepararFiltrosPrecios(){
@@ -1736,14 +1779,14 @@ function renderPrecios(){
     return `<tr>
       <td><input type="checkbox" class="precio-check" data-codigo="${esc(a.codigo)}"></td>
       <td>${esc(a.codigo)}</td><td>${esc(a.descripcion)}</td><td>${esc(a.proveedor||'')}</td>
-      <td class="num">${dinero(a.costo)}</td><td class="num">${Number(a.iva||0).toLocaleString('es-AR')}%</td>
+      <td class="num">${dinero(a.costo)}</td>
       <td class="num"><input class="price-input precio-gan" data-codigo="${esc(a.codigo)}" type="number" min="0" step="0.01" value="${gan.toFixed(2)}" oninput="actualizarSugeridoFila('${String(a.codigo).replace(/'/g,"\\'")}')"></td>
       <td class="num">${dinero(actual)}</td>
       <td class="num price-suggest" id="psug_${esc(a.codigo)}">${dinero(sug)}</td>
       <td class="num ${cls}" id="pdif_${esc(a.codigo)}">${dif>=0?'+':''}${dinero(dif)}</td>
     </tr>`;
-  }).join(''):'<tr><td colspan="10" class="empty">No hay artículos para el filtro seleccionado</td></tr>';
-  if(preciosVisibles.length>500)tb.innerHTML+=`<tr><td colspan="10" class="small">Se muestran los primeros 500 resultados. Usá los filtros para acotar la lista.</td></tr>`;
+  }).join(''):'<tr><td colspan="9" class="empty">No hay artículos para el filtro seleccionado</td></tr>';
+  if(preciosVisibles.length>500)tb.innerHTML+=`<tr><td colspan="9" class="small">Se muestran los primeros 500 resultados. Usá los filtros para acotar la lista.</td></tr>`;
   const ch=document.getElementById('precioCheckTodos'); if(ch)ch.checked=false;
 }
 function obtenerGananciaFila(codigo){
@@ -1936,7 +1979,7 @@ async function syncProveedoresArticulos(migracionInicial=false){
       descripcion:String(a.descripcion||''),
       rubro:String(a.rubro||'').trim()||null,
       proveedor_id:a.proveedor?pm.byName.get(norm(a.proveedor))||null:null,
-      costo:Number(a.costo||0), iva:Number(a.iva||0), ganancia:Number(a.ganancia||0), precio:Number(a.precio||0),
+      costo:Number(a.costo||0), iva:0, ganancia:Number(a.ganancia||0), precio:Number(a.precio||0),
       activo:true, actualizado_en:new Date().toISOString()
     };
     // El stock solo se envía en la migración inicial o al crear un artículo nuevo.
@@ -2095,7 +2138,7 @@ async function actualizarDesdeNube(mostrar=false){
     const provById=new Map(prov.map(x=>[String(x.id),x.nombre]));
     localStorage.setItem(PROVIDER_KEY,JSON.stringify(prov.map(x=>x.nombre).sort((a,b)=>a.localeCompare(b,'es'))));
     const baseByCode=new Map(ARTICULOS_BASE.map(a=>[String(a.codigo),a]));
-    const remObjs=arts.map(r=>Object.assign({},baseByCode.get(String(r.codigo))||{}, {codigo:String(r.codigo),barra:r.codigo_barras||'',descripcion:r.descripcion||'',proveedor:r.proveedor_id?provById.get(String(r.proveedor_id))||'':'',rubro:r.rubro||'',costo:Number(r.costo||0),iva:Number(r.iva||0),ganancia:Number(r.ganancia||0),precio:Number(r.precio||0),stock:Number(r.stock||0),_remoteId:r.id}));
+    const remObjs=arts.map(r=>Object.assign({},baseByCode.get(String(r.codigo))||{}, {codigo:String(r.codigo),barra:r.codigo_barras||'',descripcion:r.descripcion||'',proveedor:r.proveedor_id?provById.get(String(r.proveedor_id))||'':'',rubro:r.rubro||'',costo:Number(r.costo||0),iva:0,ganancia:Number(r.ganancia||0),precio:Number(r.precio||0),stock:Number(r.stock||0),_remoteId:r.id}));
     const nuevos=remObjs.filter(a=>!baseByCode.has(String(a.codigo))); localStorage.setItem(NEW_ART_KEY,JSON.stringify(nuevos));
     ARTICULOS.splice(0,ARTICULOS.length,...remObjs); byCode.clear();byBar.clear();ARTICULOS.forEach(a=>{if(a.codigo)byCode.set(norm(a.codigo),a);if(a.barra)byBar.set(String(a.barra),a)});
     const sm={},cost={},price={}; ARTICULOS.forEach(a=>{const k=String(a.codigo||a.barra||a.descripcion);sm[k]=Number(a.stock||0);cost[k]=Number(a.costo||0);price[k]={precio:Number(a.precio||0),ganancia:Number(a.ganancia||0)}});
@@ -2103,7 +2146,7 @@ async function actualizarDesdeNube(mostrar=false){
     const vdBy=new Map();vd.forEach(x=>{if(!vdBy.has(x.venta_id))vdBy.set(x.venta_id,[]);vdBy.get(x.venta_id).push(x)});
     const ventasLocal=ventas.map(v=>{const d=new Date(v.fecha);return{numero:'V'+String(v.id).padStart(6,'0'),fecha:fechaLocalISO(d),hora:d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),fechaHora:d.toISOString(),medioPago:v.medio_pago,cajero:'Usuario',total:Number(v.total||0),estado:v.estado||'FINALIZADA',motivoAnulacion:v.motivo_anulacion||'',fechaAnulacion:v.anulada_en||null,_remoteId:v.id,items:(vdBy.get(v.id)||[]).map(x=>({codigo:x.codigo||'',barra:'',descripcion:x.descripcion,cantidad:Number(x.cantidad||0),precio:Number(x.precio_unitario||0),subtotal:Number(x.subtotal||0)}))}});localStorage.setItem(SALES_KEY,JSON.stringify(ventasLocal));
     const cdBy=new Map();cd.forEach(x=>{if(!cdBy.has(x.compra_id))cdBy.set(x.compra_id,[]);cdBy.get(x.compra_id).push(x)});
-    const comprasLocal=compras.map(c=>{const d=new Date(c.fecha),parts=String(c.comprobante||'').split(' ');return{numeroCompra:'C'+String(c.id).padStart(6,'0'),fecha:fechaLocalISO(d),tipo:parts[0]||'FACTURA',sucursal:'',numeroComprobante:String(c.comprobante||''),proveedor:c.proveedor_id?provById.get(String(c.proveedor_id))||'':'',actualizarCosto:true,total:Number(c.total||0),_remoteId:c.id,items:(cdBy.get(c.id)||[]).map(x=>({codigo:x.codigo||'',barra:'',descripcion:x.descripcion,cantidad:Number(x.cantidad||0),costo:Number(x.costo_unitario||0),iva:21,ganancia:0,nuevoPrecio:0,subtotal:Number(x.subtotal||0)}))}});localStorage.setItem(PURCHASE_KEY,JSON.stringify(comprasLocal));
+    const comprasLocal=compras.map(c=>{const d=new Date(c.fecha),parts=String(c.comprobante||'').split(' ');return{numeroCompra:'C'+String(c.id).padStart(6,'0'),fecha:fechaLocalISO(d),tipo:parts[0]||'FACTURA',sucursal:'',numeroComprobante:String(c.comprobante||''),proveedor:c.proveedor_id?provById.get(String(c.proveedor_id))||'':'',actualizarCosto:true,total:Number(c.total||0),_remoteId:c.id,items:(cdBy.get(c.id)||[]).map(x=>({codigo:x.codigo||'',barra:'',descripcion:x.descripcion,cantidad:Number(x.cantidad||0),costo:Number(x.costo_unitario||0),iva:0,ganancia:0,nuevoPrecio:0,subtotal:Number(x.subtotal||0)}))}});localStorage.setItem(PURCHASE_KEY,JSON.stringify(comprasLocal));
     localStorage.setItem(STOCK_MOV_KEY,JSON.stringify(movs.map(x=>{const d=new Date(x.fecha);return{fecha:fechaLocalISO(d),hora:d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),tipo:x.tipo,codigo:x.codigo||'',descripcion:x.descripcion||'',anterior:Number(x.stock_anterior||0),movimiento:Number(x.cantidad||0),nuevo:Number(x.stock_nuevo||0),detalle:x.observaciones||x.referencia||'',_remoteId:x.id}})));
     localStorage.setItem(PRICE_HISTORY_KEY,JSON.stringify(ph.map(x=>{const d=new Date(x.fecha);return{fecha:fechaLocalISO(d),hora:d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),codigo:x.codigo||'',descripcion:x.descripcion||'',costo:Number(x.costo||0),ganancia:Number(x.ganancia||0),precioAnterior:Number(x.precio_anterior||0),precioNuevo:Number(x.precio_nuevo||0),motivo:x.motivo||'',_remoteId:x.id}})));
     const cerradas=cajas.filter(x=>x.estado==='CERRADA').map(x=>{const a=new Date(x.apertura),c=x.cierre?new Date(x.cierre):a;return{sesionId:'REMOTE-'+x.id,fecha:fechaLocalISO(a),horaApertura:a.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}),horaCierre:c.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}),fondoInicial:Number(x.fondo_inicial||0),esperado:Number(x.efectivo_esperado||0),contado:Number(x.efectivo_contado||0),diferencia:Number(x.diferencia||0),_remoteId:x.id}});localStorage.setItem(CAJA_CLOSE_KEY,JSON.stringify(cerradas));
